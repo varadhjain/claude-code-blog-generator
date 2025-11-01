@@ -17,6 +17,7 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "clean": "rm -rf dist",
+    "sidebar": "npx ts-node scripts/interactive-sidebar.ts",
     "workflow": "npx ts-node scripts/interactive-workflow.ts",
     "prepublishOnly": "npm run clean && npm run build && npm test"
   },
