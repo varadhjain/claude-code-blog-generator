@@ -14,10 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { OpenAIClient } from '../../src/ai/client';
-import {
-  analyzeSessionContextual,
-  formatContextualAnnotations,
-} from '../../src/analyzer/user-annotations/contextual-annotator';
+import { analyzeSession, formatAnnotations } from '../../src/user-annotations';
 
 interface FileItem {
   name: string;
@@ -69,12 +66,12 @@ async function main() {
 
   try {
     const client = new OpenAIClient();
-    const result = await analyzeSessionContextual(client, {
+    const result = await analyzeSession(client, {
       sessionPath: selectedFile,
       outputPath,
     });
 
-    console.log(formatContextualAnnotations(result));
+    console.log(formatAnnotations(result));
     console.log(client.getTokenTracker().report());
 
     console.log('✅ Analysis complete!');
