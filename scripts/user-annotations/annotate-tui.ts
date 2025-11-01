@@ -15,6 +15,7 @@ import * as path from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { OpenAIClient } from '../../src/ai/client';
 import { analyzeSession, formatAnnotations } from '../../src/user-annotations';
+import { uploadToGist } from '../../src/gist-uploader';
 
 interface FileItem {
   name: string;
@@ -79,6 +80,36 @@ async function main() {
 
     if (outputPath) {
       console.log(`📄 Annotations saved to: ${outputPath}`);
+    }
+
+    // Ask if they want to upload to Gist
+    const uploadGist = await confirm({
+      message: 'Upload annotations to GitHub Gist?',
+      default: false,
+    });
+
+    if (uploadGist) {
+      console.log('');
+      console.log('🚀 Uploading to GitHub Gist...');
+
+      try {
+        const sessionName = path.basename(selectedFile);
+        const gistResult = await uploadToGist(result, sessionName, {
+          isPublic: true,
+        });
+
+        console.log('');
+        console.log('✅ Gist created successfully!');
+        console.log(`🔗 URL: ${gistResult.url}`);
+        console.log('');
+      } catch (error) {
+        console.error('');
+        console.error(
+          '❌ Failed to create gist:',
+          error instanceof Error ? error.message : error
+        );
+        console.error('');
+      }
     }
   } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : error);

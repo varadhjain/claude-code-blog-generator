@@ -13,6 +13,7 @@ This launches an interactive TUI where you can:
 2. Select a `.jsonl` session file
 3. Optionally save annotations to JSON
 4. View detailed analysis with color-coded messages
+5. **Upload annotations to GitHub Gist** for easy sharing
 
 ## What It Does
 
@@ -99,6 +100,20 @@ Annotations are saved as JSON:
 }
 ```
 
+## GitHub Gist Upload
+
+After analysis completes, you can optionally upload the results to a **public GitHub Gist** for easy sharing.
+
+**Requirements:**
+- Install `gh` CLI: https://cli.github.com/
+- Authenticate: `gh auth login`
+
+**What gets uploaded:**
+- Session name
+- Detected phases
+- All message annotations with reasoning
+- Statistics
+
 ## Use Cases
 
 1. **Session Review**: Understand user's approach and decision points
@@ -106,6 +121,7 @@ Annotations are saved as JSON:
 3. **Blog Generation**: Use annotations as sidebar/TOC for blog posts
 4. **Learning**: Extract "what we can learn" from successful sessions
 5. **Debugging**: Track where user had to correct or restart
+6. **Sharing**: Upload to Gist and share the URL with teammates
 
 ## Future: AmpCode-style Hosting
 
