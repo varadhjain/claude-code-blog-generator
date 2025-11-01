@@ -1,5 +1,7 @@
 # Blog Post Generator - Claude Code Instructions
 
+**CRITICAL: NEVER CREATE VERBOSE FILES. Keep all docs concise and scannable.**
+
 ## AI Model Policy
 
 **CRITICAL**: This project uses **gpt-5-nano ONLY** for all AI operations.

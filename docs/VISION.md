@@ -1,62 +1,29 @@
-# Vision: Session Publishing Platform
+# Vision: AmpCode-Style Session Viewer
 
-## Evolution
-
-**Current**: JSONL → Blog Post (static, one-way)
-**Future**: JSONL → Interactive Session Viewer (dynamic, explorable)
+**Current:** JSONL → Annotations/Blog
+**Future:** JSONL → Interactive Web Viewer
 
 ## Core Features
 
-### 1. PII Redaction
-- File paths → generic placeholders
-- Usernames → anonymized
-- API keys, tokens → redacted
-- Project-specific names → configurable masking
-
-### 2. Interactive Viewer (AmpCode-style)
-- Collapsible message tree
-- Syntax-highlighted code
-- File diffs (before/after)
-- Tool call visualizations
-- Timeline view
-
-### 3. AI-Powered Insights (multiple modes)
-- **Interesting Moments** - key decisions, pivots, breakthroughs
-- **What We Can Learn** - patterns, anti-patterns, best practices
-- **Session Summary** - TL;DR with takeaways
-- **Code Quality Analysis** - what worked, what didn't
-- **Debugging Journey** - problem-solving flow
-
-### 4. Multiple Output Formats
-- Blog post (existing)
-- Interactive web viewer
-- Shareable link (hosted)
-- Embedded widget
-- PDF export
+1. **PII Redaction** - Strip file paths, API keys, usernames
+2. **Interactive Viewer** - Collapsible messages, syntax highlighting, diffs
+3. **AI Insights** - Interesting moments, patterns, learnings
+4. **Multiple Formats** - Web, blog, PDF, embeds
+5. **Hosting** - Shareable links, public/private
 
 ## Architecture
 
 ```
-JSONL Session
-    ↓
-PII Redaction Layer
-    ↓
-Session Digest (structured data)
-    ↓
-    ├─→ Blog Post Generator (existing)
-    ├─→ Interactive Viewer (HTML/JS)
-    ├─→ Insights Analyzer (AI commentary)
-    └─→ Publishing Service (hosting)
+JSONL → Redact → Analyze → View → Host
 ```
 
-## Processing Modes (all using gpt-5-nano)
+## AI Modes
 
-1. **Narrative** - blog posts (existing)
-2. **Insights** - interesting things you can learn
-3. **Code Review** - technical analysis
-4. **Pattern Mining** - extract reusable patterns
-5. **Session Archaeology** - investigative analysis
+1. User annotations (done)
+2. AI insights (interesting moments)
+3. Code review
+4. Pattern mining
 
 ## Goal
 
-Turn every Claude Code session into shareable, explorable learning material.
+Shareable, explorable sessions like AmpCode threads.
