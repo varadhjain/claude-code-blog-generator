@@ -105,11 +105,11 @@ export class OpenAIClient {
   private client: OpenAI;
   private tokenTracker: TokenTracker;
 
-  // gpt-5-nano pricing (as of August 2025)
-  // Input: $0.05 per 1M tokens
-  // Output: $0.40 per 1M tokens
-  private readonly INPUT_COST_PER_TOKEN = 0.05 / 1_000_000;
-  private readonly OUTPUT_COST_PER_TOKEN = 0.4 / 1_000_000;
+  // gpt-4o-mini pricing
+  // Input: $0.15 per 1M tokens
+  // Output: $0.60 per 1M tokens
+  private readonly INPUT_COST_PER_TOKEN = 0.15 / 1_000_000;
+  private readonly OUTPUT_COST_PER_TOKEN = 0.6 / 1_000_000;
 
   constructor(tokenTracker?: TokenTracker) {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -144,7 +144,7 @@ export class OpenAIClient {
     } = options;
 
     const response = await this.client.chat.completions.create({
-      model: 'gpt-5-nano',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },

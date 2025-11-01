@@ -53,3 +53,4 @@ output/
 !CLAUDE.md
 !SETUP.md
 !docs/**/*.md
+annotations-output.json
