@@ -1,10 +1,9 @@
 #!/usr/bin/env bun
 
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, writeFile } from 'fs/promises';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import { select } from '@inquirer/prompts';
-import { spawn } from 'child_process';
 
 interface Project {
   name: string;
@@ -21,15 +20,42 @@ interface Conversation {
   firstUserMessage?: string;
 }
 
+interface ToolUse {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: any;
+}
+
+interface ToolResult {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string | Array<{ type: string; text?: string }>;
+}
+
+interface TextContent {
+  type: 'text';
+  text: string;
+}
+
+interface ThinkingContent {
+  type: 'thinking';
+  thinking: string;
+}
+
+type ContentBlock = TextContent | ThinkingContent | ToolUse | ToolResult;
+
 interface JsonlEntry {
   type: string;
   summary?: string;
   message?: {
     role: string;
-    content: string | Array<{ type: string; text: string }>;
+    content: string | ContentBlock[];
   };
   isMeta?: boolean;
   timestamp?: string;
+  sessionId?: string;
+  cwd?: string;
 }
 
 /**
@@ -78,7 +104,7 @@ async function getProjects(): Promise<Project[]> {
  * Extract text content from message content (handles both string and array formats)
  */
 function extractTextContent(
-  content: string | Array<{ type: string; text: string }>
+  content: string | ContentBlock[]
 ): string {
   if (typeof content === 'string') {
     return content;
@@ -86,7 +112,7 @@ function extractTextContent(
   if (Array.isArray(content)) {
     return content
       .filter((item) => item.type === 'text')
-      .map((item) => item.text)
+      .map((item) => (item as TextContent).text)
       .join('\n');
   }
   return '';
@@ -212,54 +238,252 @@ function formatDate(date: Date): string {
 }
 
 /**
- * Create a GitHub gist from a file
+ * Parse the full JSONL conversation
  */
-async function createGist(
-  filePath: string,
-  description?: string
-): Promise<string | null> {
-  return new Promise((resolve) => {
-    const fileName = basename(filePath);
-    const args = ['gist', 'create', filePath];
+async function parseConversation(filePath: string): Promise<JsonlEntry[]> {
+  const content = await Bun.file(filePath).text();
+  const lines = content.split('\n').filter((l: string) => l.trim());
 
-    if (description) {
-      args.push('--desc', description);
+  const entries: JsonlEntry[] = [];
+
+  for (const line of lines) {
+    try {
+      const entry: JsonlEntry = JSON.parse(line);
+      // Only include user, assistant, and system messages
+      if (['user', 'assistant', 'system'].includes(entry.type)) {
+        entries.push(entry);
+      }
+    } catch (err) {
+      // Skip invalid JSON lines
+      continue;
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Format content blocks as markdown
+ */
+function formatContent(content: string | ContentBlock[]): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  let output = '';
+
+  for (const block of content) {
+    if (block.type === 'text') {
+      output += (block as TextContent).text + '\n\n';
+    } else if (block.type === 'thinking') {
+      const thinking = (block as ThinkingContent).thinking;
+      output += `<details>\n<summary><strong>Thinking</strong></summary>\n\n${thinking}\n\n</details>\n\n`;
+    } else if (block.type === 'tool_use') {
+      const tool = block as ToolUse;
+      const inputStr = JSON.stringify(tool.input, null, 2);
+      output += `**Tool Used:** \`${tool.name}\`\n\n\`\`\`json\n${inputStr}\n\`\`\`\n\n`;
+    } else if (block.type === 'tool_result') {
+      const result = block as ToolResult;
+      let resultText = '';
+
+      if (typeof result.content === 'string') {
+        resultText = result.content;
+      } else if (Array.isArray(result.content)) {
+        resultText = result.content
+          .map((c: any) => c.text || '')
+          .join('\n');
+      }
+
+      const truncated = resultText.length > 2000 ? resultText.substring(0, 2000) + '\n\n... (truncated)' : resultText;
+      output += `\`\`\`\n${truncated}\n\`\`\`\n\n`;
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Check if a user message is just a tool result
+ */
+function isToolResultMessage(entry: JsonlEntry): boolean {
+  if (entry.type !== 'user' || !entry.message?.content) return false;
+
+  if (typeof entry.message.content === 'string') return false;
+  if (!Array.isArray(entry.message.content)) return false;
+
+  // Check if all content blocks are tool results
+  return entry.message.content.every(block => block.type === 'tool_result');
+}
+
+/**
+ * Convert JSONL conversation to markdown
+ */
+function convertToMarkdown(entries: JsonlEntry[], summary?: string, command?: string): string {
+  let markdown = `# Claude Code Conversation\n\n`;
+
+  if (command) {
+    markdown += `> Generated with: \`${command}\`\n\n`;
+  }
+
+  if (summary) {
+    markdown += `> **Summary:** ${summary}\n\n`;
+  }
+
+  markdown += `---\n\n`;
+
+  let i = 0;
+  while (i < entries.length) {
+    const entry = entries[i];
+
+    if (!entry.message) {
+      i++;
+      continue;
     }
 
-    // Secret is the default, no flag needed
+    const timestamp = entry.timestamp
+      ? new Date(entry.timestamp).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+      : '';
 
-    const gh = spawn('gh', args, {
-      stdio: ['inherit', 'pipe', 'pipe'],
-    });
-
-    let output = '';
-    let errorOutput = '';
-
-    gh.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    gh.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    gh.on('close', (code) => {
-      if (code === 0) {
-        // Extract URL from output (gh returns the gist URL)
-        const url = output.trim().split('\n').pop()?.trim();
-        resolve(url || null);
-      } else {
-        console.error(`Error creating gist: ${errorOutput}`);
-        resolve(null);
+    if (entry.type === 'user') {
+      // Skip tool result messages
+      if (entry.isMeta || isToolResultMessage(entry)) {
+        i++;
+        continue;
       }
-    });
-  });
+
+      // Group consecutive user messages
+      markdown += `### User\n\n`;
+      if (timestamp) {
+        markdown += `<sub>${timestamp}</sub>\n\n`;
+      }
+
+      // Add this message
+      markdown += formatContent(entry.message.content);
+
+      // Look for consecutive user messages
+      let j = i + 1;
+      while (j < entries.length && entries[j].type === 'user' && !isToolResultMessage(entries[j])) {
+        markdown += formatContent(entries[j].message!.content);
+        j++;
+      }
+
+      markdown += `\n\n---\n\n`;
+      i = j;
+
+    } else if (entry.type === 'assistant') {
+      // Group consecutive assistant messages (including tool results in between)
+      markdown += `### Assistant\n\n`;
+      if (timestamp) {
+        markdown += `<sub>${timestamp}</sub>\n\n`;
+      }
+
+      // Add this message
+      markdown += formatContent(entry.message.content);
+
+      // Look for consecutive assistant messages and tool results
+      let j = i + 1;
+      while (j < entries.length) {
+        const nextEntry = entries[j];
+
+        // Continue if it's an assistant message
+        if (nextEntry.type === 'assistant') {
+          markdown += formatContent(nextEntry.message!.content);
+          j++;
+        }
+        // Continue if it's a tool result (skip, as it's already in assistant content)
+        else if (nextEntry.type === 'user' && isToolResultMessage(nextEntry)) {
+          j++;
+        }
+        // Stop at actual user input
+        else {
+          break;
+        }
+      }
+
+      markdown += `\n\n---\n\n`;
+      i = j;
+
+    } else if (entry.type === 'system') {
+      markdown += `<details>\n<summary>System</summary>\n\n`;
+      markdown += formatContent(entry.message.content);
+      markdown += `\n</details>\n\n\n---\n\n`;
+      i++;
+    } else {
+      i++;
+    }
+  }
+
+  return markdown;
+}
+
+/**
+ * Save markdown to file
+ */
+async function saveMarkdown(
+  markdown: string,
+  sessionId: string
+): Promise<string> {
+  const fileName = `${sessionId}.md`;
+  const filePath = join(process.cwd(), fileName);
+
+  await writeFile(filePath, markdown, 'utf-8');
+
+  return filePath;
+}
+
+/**
+ * Process a single JSONL file (non-interactive mode)
+ */
+async function processFile(filePath: string): Promise<void> {
+  // Check if file exists
+  try {
+    await stat(filePath);
+  } catch (err) {
+    console.error(`❌ File not found: ${filePath}`);
+    process.exit(1);
+  }
+
+  // Parse the conversation
+  const entries = await parseConversation(filePath);
+
+  // Extract summary from entries
+  const summary = entries.find(e => e.type === 'summary')?.summary;
+
+  // Get the command used
+  const command = `bun ccblog.ts ${filePath}`;
+
+  // Convert to markdown
+  const markdown = convertToMarkdown(entries, summary, command);
+
+  // Output to stdout
+  console.log(markdown);
 }
 
 /**
  * Main function
  */
 async function main() {
+  // Check for command-line argument (non-interactive mode)
+  const args = process.argv.slice(2);
+
+  if (args.length > 0) {
+    // Non-interactive mode: process the file directly
+    const filePath = args[0];
+    await processFile(filePath);
+    return;
+  }
+
+  // Interactive mode
   console.log(
     '\n🤖 Claude Code Blog Generator - Create a Gist from a Conversation\n'
   );
@@ -314,21 +538,24 @@ async function main() {
     pageSize: 15,
   });
 
-  console.log(`\nCreating gist for ${selectedConversation.name}...`);
+  console.log(`\nParsing conversation...`);
 
-  // Step 3: Create gist
-  const gistUrl = await createGist(
-    selectedConversation.path,
-    `Claude Code conversation from ${selectedProject.name}`
-  );
+  // Step 3: Parse the conversation
+  const entries = await parseConversation(selectedConversation.path);
 
-  if (gistUrl) {
-    console.log(`\n✅ Gist created successfully!`);
-    console.log(`📎 URL: ${gistUrl}\n`);
-  } else {
-    console.error('\n❌ Failed to create gist');
-    process.exit(1);
-  }
+  console.log(`Found ${entries.length} messages`);
+
+  // Step 4: Convert to markdown
+  console.log(`Converting to markdown...`);
+  const markdown = convertToMarkdown(entries, selectedConversation.summary);
+
+  // Step 5: Save to file
+  const sessionId = selectedConversation.name.replace('.jsonl', '');
+  const savedPath = await saveMarkdown(markdown, sessionId);
+
+  console.log(`\n✅ Markdown saved successfully!`);
+  console.log(`📄 File: ${savedPath}`);
+  console.log(`📊 ${entries.length} messages converted\n`);
 }
 
 // Run the main function
