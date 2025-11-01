@@ -8,10 +8,10 @@
  * - Narrative hooks and structure
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
-import { SessionIndex, indexToText } from '../analyzer/session-indexer';
-import { BlogTemplate } from '../types/templates';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
+import { SessionIndex, indexToText } from '../../analyzer/blog-generation/session-indexer';
+import { BlogTemplate } from '../../types/templates';
 
 export interface MetaAnalysis {
   user_goal: {

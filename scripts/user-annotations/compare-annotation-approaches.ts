@@ -10,15 +10,15 @@
  */
 
 import * as path from 'path';
-import { OpenAIClient } from '../src/ai/client';
+import { OpenAIClient } from '../../src/ai/client';
 import {
   analyzeSession,
   formatAnnotations,
-} from '../src/analyzer/user-message-annotator';
+} from '../../src/analyzer/user-annotations/user-message-annotator';
 import {
   analyzeSessionContextual,
   formatContextualAnnotations,
-} from '../src/analyzer/contextual-annotator';
+} from '../../src/analyzer/user-annotations/contextual-annotator';
 
 async function main() {
   const args = process.argv.slice(2);

@@ -10,7 +10,7 @@
  * This grounds the LLM narrative in actual session data.
  */
 
-import { MetaAnalysis } from '../prompts/meta-analysis';
+import { MetaAnalysis } from '../../prompts/blog-generation/meta-analysis';
 
 export type ArtifactType = 'code' | 'error' | 'quote' | 'command' | 'output';
 

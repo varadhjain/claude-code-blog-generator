@@ -5,8 +5,8 @@
  * Driven by user intent and session highlights.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 import { UserIntent } from './user-intent';
 import { Highlights } from './highlights-extraction';
 

@@ -5,7 +5,7 @@
  * This steers all subsequent narrative extraction.
  */
 
-import { SessionDigest } from '../analyzer/digest-builder';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export type SessionAngle =
   | 'one-shot-success'
@@ -82,7 +82,7 @@ export function suggestAngle(digest: SessionDigest): SessionAngle {
 /**
  * Build focus areas based on angle
  */
-export function getFocusAreas(angle: SessionAngle, digest: SessionDigest): string[] {
+export function getFocusAreas(angle: SessionAngle, _digest: SessionDigest): string[] {
   switch (angle) {
     case 'one-shot-success':
       return [

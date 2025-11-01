@@ -5,8 +5,8 @@
  * Combines session type, key decisions, tool patterns, and phases into a story.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export interface NamedPhase {
   name: string; // Semantic name (e.g., "Planning & Scoping", not "Phase 1")

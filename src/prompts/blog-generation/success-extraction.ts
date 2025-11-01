@@ -5,8 +5,8 @@
  * Complements interesting-moments by focusing on ALL successes, not just unusual ones.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export interface Success {
   what: string; // What went well

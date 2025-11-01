@@ -5,20 +5,20 @@
  * This is what goes alongside the formatted transcript in the blog post.
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 import { SessionDigest } from './digest-builder';
-import { ApproachNarrative, buildApproachNarrative } from '../prompts/approach-narrative';
-import { ProblemsEncountered, extractProblems } from '../prompts/problem-extraction';
+import { ApproachNarrative, buildApproachNarrative } from '../../prompts/blog-generation/approach-narrative';
+import { ProblemsEncountered, extractProblems } from '../../prompts/blog-generation/problem-extraction';
 import {
   SuccessesIdentified,
   extractSuccesses,
-} from '../prompts/success-extraction';
+} from '../../prompts/blog-generation/success-extraction';
 import {
   LearningsExtracted,
   extractLearnings,
-} from '../prompts/structured-learning';
-import { InterestingMoments, findInterestingMoments } from '../prompts/interesting-moments';
-import { TitleOptions, brainstormTitles } from '../prompts/title-brainstorm';
+} from '../../prompts/blog-generation/structured-learning';
+import { InterestingMoments, findInterestingMoments } from '../../prompts/blog-generation/interesting-moments';
+import { TitleOptions, brainstormTitles } from '../../prompts/blog-generation/title-brainstorm';
 
 export interface SidebarContent {
   session_goal: string;

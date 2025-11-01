@@ -6,8 +6,8 @@
  * Models after interesting-moments.ts format (Wilhelm liked it).
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 import { UserIntent } from './user-intent';
 
 export interface Highlight {

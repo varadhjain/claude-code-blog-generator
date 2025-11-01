@@ -4,7 +4,7 @@
  * Generates a 2-3 sentence narrative summary for an entire phase
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 import { PhaseType } from './phase-classification';
 
 export interface PhaseData {

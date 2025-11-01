@@ -4,7 +4,7 @@
  * Identifies key technical decisions made during the session
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 
 export interface DecisionContext {
   message_window: Array<{

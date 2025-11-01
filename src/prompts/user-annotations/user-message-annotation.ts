@@ -6,7 +6,7 @@
  * - Color code (green/yellow/red) indicating session flow
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 
 export type AnnotationColor = 'green' | 'yellow' | 'red';
 

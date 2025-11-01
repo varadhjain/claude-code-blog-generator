@@ -4,7 +4,7 @@
  * Generates potential blog post titles based on session content and chosen angle.
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 import { InterestingMoment } from './interesting-moments';
 
 export interface TitleOptions {

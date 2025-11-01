@@ -5,8 +5,8 @@
  * Tracks the complete problem-solving narrative: symptom → attempts → resolution.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export interface ProblemAttempt {
   approach: string;

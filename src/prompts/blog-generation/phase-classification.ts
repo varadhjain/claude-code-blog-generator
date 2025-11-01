@@ -5,7 +5,7 @@
  * is happening: Setup, Planning, Coding, Debugging, Testing, Documentation, etc.
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 
 export type PhaseType =
   | 'setup'

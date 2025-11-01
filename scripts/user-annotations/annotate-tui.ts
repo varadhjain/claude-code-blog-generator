@@ -13,11 +13,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
-import { OpenAIClient } from '../src/ai/client';
+import { OpenAIClient } from '../../src/ai/client';
 import {
   analyzeSessionContextual,
   formatContextualAnnotations,
-} from '../src/analyzer/contextual-annotator';
+} from '../../src/analyzer/user-annotations/contextual-annotator';
 
 interface FileItem {
   name: string;

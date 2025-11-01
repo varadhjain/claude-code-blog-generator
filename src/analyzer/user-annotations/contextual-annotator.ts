@@ -6,13 +6,13 @@
  */
 
 import * as fs from 'fs';
-import { OpenAIClient } from '../ai/client';
-import { extractUserMessages } from '../prompts/user-message-annotation';
-import { detectPhases, type PhaseDetectionResult } from '../prompts/phase-detection';
+import { OpenAIClient } from '../../ai/client';
+import { extractUserMessages } from '../../prompts/user-annotations/user-message-annotation';
+import { detectPhases, type PhaseDetectionResult } from '../../prompts/user-annotations/phase-detection';
 import {
   annotateWithContext,
   type ContextualAnnotationResult,
-} from '../prompts/contextual-annotation';
+} from '../../prompts/user-annotations/contextual-annotation';
 
 export interface ContextualAnnotatorOptions {
   sessionPath: string;

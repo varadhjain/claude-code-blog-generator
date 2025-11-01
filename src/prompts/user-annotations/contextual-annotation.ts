@@ -4,7 +4,7 @@
  * Annotates a single user message with context from prior messages
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 import { AnnotationColor } from './user-message-annotation';
 
 export interface ContextualAnnotationInput {

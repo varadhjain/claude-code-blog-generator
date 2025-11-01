@@ -5,8 +5,8 @@
  * The story is about human + Claude Code interaction, not just the LLM.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export type SessionArchetype =
   | 'one-shot'

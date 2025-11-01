@@ -5,8 +5,8 @@
  * Helps users discover what's worth writing about.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export interface InterestingMoment {
   title: string;

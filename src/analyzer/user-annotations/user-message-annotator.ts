@@ -10,8 +10,8 @@ import {
   annotateUserMessages,
   extractUserMessages,
   type AnnotationResult,
-} from '../prompts/user-message-annotation';
-import { OpenAIClient } from '../ai/client';
+} from '../../prompts/user-annotations/user-message-annotation';
+import { OpenAIClient } from '../../ai/client';
 
 export interface AnnotatorOptions {
   sessionPath: string; // Path to .jsonl file

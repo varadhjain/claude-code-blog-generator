@@ -17,9 +17,9 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "clean": "rm -rf dist",
-    "annotate": "npx ts-node scripts/annotate-tui.ts",
-    "sidebar": "npx ts-node scripts/interactive-sidebar.ts",
-    "workflow": "npx ts-node scripts/interactive-workflow.ts",
+    "annotate": "npx ts-node scripts/user-annotations/annotate-tui.ts",
+    "sidebar": "npx ts-node scripts/blog-generation/interactive-sidebar.ts",
+    "workflow": "npx ts-node scripts/blog-generation/interactive-workflow.ts",
     "prepublishOnly": "npm run clean && npm run build && npm test"
   },
   "keywords": [

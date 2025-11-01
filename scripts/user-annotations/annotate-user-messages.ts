@@ -10,11 +10,11 @@
  */
 
 import * as path from 'path';
-import { OpenAIClient } from '../src/ai/client';
+import { OpenAIClient } from '../../src/ai/client';
 import {
   analyzeSession,
   formatAnnotations,
-} from '../src/analyzer/user-message-annotator';
+} from '../../src/analyzer/user-annotations/user-message-annotator';
 
 async function main() {
   const args = process.argv.slice(2);

@@ -5,8 +5,8 @@
  * Upgrades from theme strings to structured insights with proof.
  */
 
-import { OpenAIClient } from '../ai/client';
-import { SessionDigest } from '../analyzer/digest-builder';
+import { OpenAIClient } from '../../ai/client';
+import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 
 export interface Learning {
   category: 'technical' | 'process' | 'tool-usage' | 'constraint-driven';

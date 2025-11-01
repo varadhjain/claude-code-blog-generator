@@ -4,7 +4,7 @@
  * High-level analysis to identify task boundaries in user messages
  */
 
-import { OpenAIClient } from '../ai/client';
+import { OpenAIClient } from '../../ai/client';
 
 export interface UserMessagePhase {
   phaseId: number;
