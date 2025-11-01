@@ -42,3 +42,11 @@ coverage/
 # Sample sessions (may contain PII)
 sample-sessions/
 *.jsonl
+
+# Generated outputs
+output/
+*.md
+!README.md
+!CLAUDE.md
+!SETUP.md
+!docs/**/*.md

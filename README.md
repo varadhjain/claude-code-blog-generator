@@ -1,53 +1,44 @@
 # Claude Code Blog Post Generator
 
-Convert Claude Code sessions into educational blog posts with intelligent narrative chunking.
+Convert Claude Code session transcripts into narrative blog posts with citation support.
 
 ## What It Does
 
-Parses `~/.claude/projects/[session].jsonl` → Detects phases (Setup, Coding, Debugging) → Generates blog post
+Parses `.jsonl` session files → Extracts narrative elements (approach, problems, learnings) → Generates sidebar with message citations
 
-**Key Innovation**: Semantic chunking instead of chronological messages.
+**Output**: A sidebar markdown file with:
+- Session goal & approach
+- Problems encountered (with resolution paths)
+- What went well (velocity, elegance, efficiency)
+- Evidence-backed learnings
+- Interesting moments & potential titles
+- **Message references** for linking narrative back to source
 
-```
-Instead of:  Message 1 → Message 2 → Message 3...
-We create:   Setup (1-3) → Coding (4-10) → Bug Fix (11-15)
-```
+## Quick Start
 
-## Install
+See **[SETUP.md](./SETUP.md)** for complete setup instructions.
 
 ```bash
 npm install
-npm run build
+
+# Create .env with your OpenAI API key
+echo "OPENAI_API_KEY=sk-proj-your-key" > .env
+
+# Generate sidebar for a session
+npm run workflow sample-sessions/your-session.jsonl
+
+# Auto-opens generated sidebar in output/
 ```
 
-## Usage
+## Cost
 
-```bash
-# Generate blog post
-blog-post-generator generate <session-id>
-
-# List available sessions
-blog-post-generator list
-```
+~$0.002 per session using gpt-5-nano ($0.05/$0.40 per 1M tokens)
 
 ## For Developers
 
-**Read these docs in order:**
-
-1. **[PROJECT.md](./PROJECT.md)** - Core concept (5 min read)
-2. **[MILESTONES.md](./MILESTONES.md)** - 8 milestones to build independently
-3. **[PROGRESS.md](./PROGRESS.md)** - Track what's done
-
-**Quick Start:**
-```bash
-git clone https://github.com/varadhjain/claude-code-blog-generator.git
-cd claude-code-blog-generator
-npm install
-npm run dev  # Watch mode
-npm test     # Run tests
-```
-
-Pick a milestone from `MILESTONES.md`, claim it in `PROGRESS.md`, and build it.
+1. **[PROJECT.md](./PROJECT.md)** - Core concept
+2. **[MILESTONES.md](./MILESTONES.md)** - Work breakdown
+3. **[SETUP.md](./SETUP.md)** - Setup & usage guide
 
 ## Tech Stack
 
