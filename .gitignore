@@ -38,3 +38,7 @@ coverage/
 # API keys (safety check)
 **/openai-key*.txt
 **/*secret*.json
+
+# Sample sessions (may contain PII)
+sample-sessions/
+*.jsonl
