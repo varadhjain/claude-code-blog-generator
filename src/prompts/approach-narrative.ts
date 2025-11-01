@@ -8,8 +8,15 @@
 import { OpenAIClient } from '../ai/client';
 import { SessionDigest } from '../analyzer/digest-builder';
 
+export interface NamedPhase {
+  name: string; // Semantic name (e.g., "Planning & Scoping", not "Phase 1")
+  message_range: [number, number];
+  description: string; // What happened in this phase (1 sentence)
+}
+
 export interface ApproachNarrative {
-  high_level_strategy: string; // 2-3 sentences describing overall approach
+  high_level_strategy: string; // 2-3 sentences describing USER's overall approach
+  named_phases: NamedPhase[]; // Semantically named phases
   key_characteristics: string[]; // 3-5 defining traits (e.g., "documentation-first", "test-driven", "iterative")
   workflow_pattern: string; // The general workflow (e.g., "plan → scaffold → implement → test → refine")
   notable_decisions: Array<{
@@ -23,17 +30,32 @@ export interface ApproachNarrative {
 
 const SYSTEM_PROMPT = `You are an expert at synthesizing software development approaches into clear narratives.
 
-Your task: Describe HOW the user approached the problem, not just what they did.
+Your task: Describe HOW the USER approached the problem, not just what Claude Code did.
+
+FOCUS ON THE USER:
+- What was the user's strategy?
+- How did the user structure their work?
+- What decisions did the user make?
+- How did the user guide Claude Code?
 
 WHAT TO CAPTURE:
 
-1. **High-level strategy**: The overall game plan
-   - "Documentation-driven development: wrote comprehensive docs before any code"
-   - "Rapid prototyping: built working version first, refined later"
-   - "Test-first approach: defined test cases before implementation"
-   - "Exploratory coding: learned by experimentation and iteration"
+1. **High-level strategy**: The USER's overall game plan (2-3 sentences)
+   - "User took a documentation-driven approach: wrote comprehensive docs before any code"
+   - "User chose rapid prototyping: built working version first, refined later"
+   - "User defined test cases before implementation"
+   - "User learned by experimentation and iteration"
 
-2. **Key characteristics**: Defining traits of this approach
+2. **Named Phases**: Semantic phase names (NOT "Phase 1", "Phase 2")
+   - "Planning & Scoping" (messages 1-20)
+   - "Scaffolding & Setup" (messages 21-50)
+   - "Core Implementation" (messages 51-100)
+   - "Testing & Refinement" (messages 101-130)
+   - "Documentation & Polish" (messages 131-149)
+
+   Names should describe WHAT HAPPENED, not just tool usage
+
+3. **Key characteristics**: Defining traits of this approach
    - "Planning-heavy" (many TodoWrite, ExitPlanMode)
    - "Iterative" (many small cycles of code → test → refine)
    - "Quality-focused" (tests and docs throughout)
@@ -41,20 +63,20 @@ WHAT TO CAPTURE:
    - "Collaborative" (frequent AskUserQuestion, discussion)
    - "Cost-conscious" (optimizations for token/API costs)
 
-3. **Workflow pattern**: The phases and their order
+4. **Workflow pattern**: The phases and their order
    - "Explore → Plan → Implement → Test → Deploy"
    - "Design → Code → Refactor → Document"
    - "Spike → Throw away → Rebuild properly"
 
-4. **Notable decisions that shaped the approach**:
-   - "Chose TypeScript for type safety, which caught 15 errors before runtime"
-   - "Decided to write PLAN.md before coding, which prevented scope creep"
-   - "Used gpt-5-nano instead of gpt-4o to reduce costs by 85%"
+5. **Notable decisions that shaped the approach**:
+   - "User chose TypeScript for type safety, which caught 15 errors before runtime"
+   - "User decided to write PLAN.md before coding, which prevented scope creep"
+   - "User asked for gpt-5-nano instead of gpt-4o to reduce costs by 85%"
 
-5. **Evolution**: How the approach changed
-   - "Started with broad exploration, pivoted to focused implementation after understanding codebase"
-   - "Initial spike revealed performance issues, switched to optimized algorithm"
-   - "Began without tests, hit bugs, added testing infrastructure"
+6. **Evolution**: How the approach changed
+   - "User started with broad exploration, pivoted to focused implementation after understanding codebase"
+   - "Initial spike revealed performance issues, user switched to optimized algorithm"
+   - "User began without tests, hit bugs, added testing infrastructure"
 
 ANALYSIS SIGNALS:
 
@@ -217,8 +239,15 @@ function buildUserPrompt(digest: SessionDigest): string {
   parts.push('Describe the approach in JSON format:');
   parts.push('{');
   parts.push(
-    '  "high_level_strategy": "2-3 sentences describing overall approach (docs-first, TDD, exploratory, etc.)",'
+    '  "high_level_strategy": "2-3 sentences describing USER\'s overall approach (docs-first, TDD, exploratory, etc.)",'
   );
+  parts.push('  "named_phases": [');
+  parts.push('    {');
+  parts.push('      "name": "Semantic phase name (e.g., Planning & Scoping, not Phase 1)",');
+  parts.push('      "message_range": [start, end],');
+  parts.push('      "description": "What happened in this phase (1 sentence)"');
+  parts.push('    }');
+  parts.push('  ],');
   parts.push(
     '  "key_characteristics": ["3-5 defining traits like planning-heavy, iterative, collaborative"],'
   );
@@ -227,14 +256,14 @@ function buildUserPrompt(digest: SessionDigest): string {
   );
   parts.push('  "notable_decisions": [');
   parts.push('    {');
-  parts.push('      "what": "decision made",');
+  parts.push('      "what": "decision USER made",');
   parts.push('      "why": "reason for decision",');
   parts.push('      "when_message": <message number>,');
   parts.push('      "impact": "how this decision shaped the rest of the session"');
   parts.push('    }');
   parts.push('  ],');
   parts.push(
-    '  "evolution": "how the approach evolved during the session (or stayed consistent)"'
+    '  "evolution": "how the USER\'s approach evolved during the session (or stayed consistent)"'
   );
   parts.push('}');
 

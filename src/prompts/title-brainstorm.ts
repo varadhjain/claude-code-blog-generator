@@ -17,34 +17,35 @@ export interface TitleOptions {
 
 const SYSTEM_PROMPT = `You are an expert at writing catchy, informative blog post titles for technical content.
 
-Your task: Generate 8-10 potential blog post titles for a coding session.
+Your task: Generate 2-3 potential blog post titles for a coding session.
 
 GOOD TITLE CHARACTERISTICS:
 - **Specific**: Mentions concrete technologies or outcomes
 - **Intriguing**: Makes reader curious
 - **Clear value**: Obvious what they'll learn
 - **Honest**: Doesn't overpromise
+- **Aligned with angle**: Matches the user's chosen story angle
 
-TITLE STYLES TO USE:
-1. **How-to**: "How to Build X in Y Minutes"
-2. **Numbered**: "5 Things I Learned Building X"
-3. **Question**: "What Happens When You Build X?"
-4. **Declaration**: "Building X: A Y Approach"
-5. **Journey**: "From Idea to Implementation: Building X"
-6. **Pattern**: "The Z Pattern for Building X"
-7. **Discovery**: "I Discovered X While Building Y"
+TITLE STYLES:
+- **How-to**: "How to Build X in Y Minutes"
+- **Numbered**: "3 Things I Learned Building X"
+- **Question**: "What Happens When You Build X?"
+- **Declaration**: "Building X: A Y Approach"
+- **Journey**: "From Idea to Implementation: Building X"
+- **Struggle**: "Three Attempts to Fix X (and What Finally Worked)"
 
 EXAMPLES OF GOOD TITLES:
 ✅ "Building a TypeScript Parser in 37 Minutes"
 ✅ "Documentation-First Development: Why I Write Docs Before Code"
-✅ "How I Reduced AI Costs by 85% with a Two-Stage Pipeline"
-✅ "3 Unusual Patterns from a Fast-Paced Coding Sprint"
-✅ "What I Learned Fighting with gpt-5-nano's API"
+✅ "Three Attempts to Fix CORS (and the Real Culprit)"
+✅ "One Detailed Prompt, Zero Corrections: Anatomy of a Perfect Claude Code Request"
 
 BAD TITLES:
 ❌ "My Coding Session" (too vague)
 ❌ "You Won't BELIEVE What Happened!" (clickbait)
 ❌ "The Ultimate Guide to Everything" (overpromise)
+
+Focus on the USER'S angle and story. Only 2-3 titles, make them count.
 
 Respond with valid JSON only.`;
 
@@ -91,12 +92,12 @@ function buildUserPrompt(
   }
 
   parts.push('---\n');
-  parts.push('Generate 8-10 potential titles in JSON format:');
+  parts.push('Generate 2-3 potential titles in JSON format:');
   parts.push('{');
   parts.push('  "titles": [');
   parts.push('    {');
   parts.push('      "title": "the blog post title",');
-  parts.push('      "style": "how-to|numbered|question|declaration|journey|pattern|discovery",');
+  parts.push('      "style": "how-to|numbered|question|declaration|journey|struggle",');
   parts.push('      "appeal": "why this title works"');
   parts.push('    }');
   parts.push('  ]');

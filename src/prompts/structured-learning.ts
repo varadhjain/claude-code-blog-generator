@@ -28,7 +28,9 @@ export interface LearningsExtracted {
 
 const SYSTEM_PROMPT = `You are an expert at extracting actionable, evidence-backed learnings from software development sessions.
 
-Your task: Identify specific lessons that can be learned from this session, backed by concrete evidence.
+Your task: Identify 3-5 specific lessons that can be learned from this session, backed by concrete evidence.
+
+IMPORTANT: Only 3-5 learnings maximum. Focus on the most valuable insights.
 
 LEARNING CATEGORIES:
 
