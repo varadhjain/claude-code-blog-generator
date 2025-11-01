@@ -1,16 +1,21 @@
 # Blog Post Generator - Claude Code Instructions
 
-**CRITICAL: NEVER CREATE VERBOSE FILES. Keep all docs concise and scannable.**
+**CRITICAL RULES:**
+- NEVER CREATE VERBOSE FILES. Keep all docs concise and scannable.
+- NEVER CREATE UNNECESSARY FILES. Before creating a new file, ask: Can this go in an existing file?
+- Consolidate documentation. Prefer one README over multiple scattered docs.
 
 ## AI Model Policy
 
-**CRITICAL**: This project uses **gpt-5-nano ONLY** for all AI operations.
+**CRITICAL**: This project uses **gpt-4o-mini ONLY** for all AI operations.
 
-- ✅ **USE**: `gpt-5-nano` (model name in OpenAI API)
-- ❌ **DO NOT USE**: Any other models (GPT-4, GPT-4o, gpt-4o-mini, Claude, etc.)
+- ✅ **USE**: `gpt-4o-mini` (actual OpenAI model)
+- ❌ **DO NOT USE**: Any other models (GPT-4, GPT-4o, Claude, etc.)
 
-**Pricing**: $0.05/1M input tokens, $0.40/1M output tokens
+**Pricing**: $0.15/1M input tokens, $0.60/1M output tokens
 **Target cost**: < $0.01 per session analysis
+
+**Note:** CLAUDE.md previously referenced "gpt-5-nano" which doesn't exist. Always use gpt-4o-mini.
 
 ## Project Goal
 

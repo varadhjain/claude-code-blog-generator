@@ -1,51 +1,60 @@
-# Claude Code Blog Post Generator
+# Claude Code Session Analyzer
 
-Convert Claude Code session transcripts into narrative blog posts with citation support.
+Two tools: User annotations + Blog generation
 
-## What It Does
+## 1. User Message Annotations (NEW)
 
-Parses `.jsonl` session files → Extracts narrative elements (approach, problems, learnings) → Generates sidebar with message citations
+**Analyze Claude Code sessions with AI**
 
-**Output**: A sidebar markdown file with:
-- Session goal & approach
-- Problems encountered (with resolution paths)
-- What went well (velocity, elegance, efficiency)
-- Evidence-backed learnings
-- Interesting moments & potential titles
-- **Message references** for linking narrative back to source
+```bash
+npm run annotate
+```
 
-## Quick Start
+- Two-pass analysis (phase detection → contextual annotation)
+- Color-coded messages: 🟢 New task | 🟡 Steering | 🔴 Restart
+- Per-message reasoning
+- Upload to GitHub Gist (Markdown)
+- Cost: ~$0.0017 per session (gpt-4o-mini)
 
-See **[SETUP.md](./SETUP.md)** for complete setup instructions.
+**Files:**
+- `src/user-annotations.ts` - All logic
+- `src/gist-uploader.ts` - Gist upload via gh CLI
+
+## 2. Blog Post Generation (ORIGINAL)
+
+**Convert sessions to blog posts**
+
+```bash
+npm run sidebar    # Generate sidebar
+npm run workflow   # Interactive mode
+```
+
+**Files:**
+- `scripts/blog-generation/` - CLI tools
+- `src/analyzer/blog-generation/` - Analysis
+- `src/prompts/blog-generation/` - AI prompts
+
+## Setup
 
 ```bash
 npm install
 
-# Create .env with your OpenAI API key
-echo "OPENAI_API_KEY=sk-proj-your-key" > .env
+# Add OpenAI key
+echo "OPENAI_API_KEY=sk-proj-..." > .env
 
-# Generate sidebar for a session
-npm run workflow sample-sessions/your-session.jsonl
-
-# Auto-opens generated sidebar in output/
+# For Gist upload
+gh auth login
 ```
 
-## Cost
+## Next Steps
 
-~$0.002 per session using gpt-5-nano ($0.05/$0.40 per 1M tokens)
+See [HANDOFF.md](HANDOFF.md) for vision & roadmap (AmpCode-style viewer)
 
-## For Developers
+## Tech
 
-1. **[PROJECT.md](./PROJECT.md)** - Core concept
-2. **[MILESTONES.md](./MILESTONES.md)** - Work breakdown
-3. **[SETUP.md](./SETUP.md)** - Setup & usage guide
-
-## Tech Stack
-
-- TypeScript 5.x
-- GPT-5-nano for phase detection ($0.024/session)
-- yargs for CLI
-- Jest for testing
+- TypeScript
+- gpt-4o-mini
+- gh CLI (for Gists)
 
 ## License
 
