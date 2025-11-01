@@ -1,6 +1,8 @@
 # Progress Tracker
 
-Track what's done, in-progress, and todo.
+See [MILESTONES.md](./MILESTONES.md) for details on each milestone.
+
+---
 
 ## Setup ✅
 - [x] GitHub repo created
@@ -9,33 +11,36 @@ Track what's done, in-progress, and todo.
 - [x] CLI skeleton (`src/cli/index.ts`)
 - [x] Planning docs
 
-## Core Modules
+---
 
-### Module 1: Session Parser
-**Owner**: _TBD_
+## Milestone 1: Parse Sessions
+**Owner**: _____
 **Status**: 🔴 Not started
 
 - [ ] Find session files in `~/.claude/projects/`
-- [ ] Parse JSONL format
+- [ ] Stream read JSONL format
+- [ ] Parse into `Message[]`
 - [ ] Reconstruct conversation with `parentUuid`
 - [ ] Extract tool usage
-- [ ] Handle subagents
 - [ ] Write tests
 
-### Module 2: Phase Detector
-**Owner**: _TBD_
+---
+
+## Milestone 2: Detect Phases
+**Owner**: _____
 **Status**: 🔴 Not started
 
-- [ ] OpenAI GPT-5-nano integration
+- [ ] OpenAI GPT-5-nano client setup
 - [ ] Tool pattern analysis
 - [ ] Phase classification prompt
-- [ ] Window-based analysis
+- [ ] Window-based analysis (3-5 messages)
 - [ ] Merge consecutive phases
-- [ ] Decision point detection
 - [ ] Write tests
 
-### Module 3: Context Tracker
-**Owner**: _TBD_
+---
+
+## Milestone 3: Track Context
+**Owner**: _____
 **Status**: 🔴 Not started
 
 - [ ] Track current objective
@@ -45,20 +50,23 @@ Track what's done, in-progress, and todo.
 - [ ] Update on phase transitions
 - [ ] Write tests
 
-### Module 4: PII Redactor
-**Owner**: _TBD_
+---
+
+## Milestone 4: Redact PII
+**Owner**: _____
 **Status**: 🔴 Not started
 
-- [ ] GPT-5-nano redaction
+- [ ] GPT-5-nano PII detection
 - [ ] File path redaction
-- [ ] Username redaction
-- [ ] Email redaction
+- [ ] Username/email redaction
 - [ ] API key redaction
 - [ ] Redaction levels (aggressive/balanced/minimal)
 - [ ] Write tests
 
-### Module 5: Blog Generator
-**Owner**: _TBD_
+---
+
+## Milestone 5: Generate Blog Post
+**Owner**: _____
 **Status**: 🔴 Not started
 
 - [ ] Title generation
@@ -67,12 +75,13 @@ Track what's done, in-progress, and todo.
 - [ ] Code snippet extraction
 - [ ] Decision point highlights
 - [ ] Lessons learned section
-- [ ] Template support
-- [ ] Metadata (date, duration, tokens)
+- [ ] Markdown rendering
 - [ ] Write tests
 
-### Module 6: Thread Generator
-**Owner**: _TBD_
+---
+
+## Milestone 6: Generate Interactive Thread
+**Owner**: _____
 **Status**: 🔴 Not started
 
 - [ ] Message-by-message view
@@ -82,48 +91,36 @@ Track what's done, in-progress, and todo.
 - [ ] Jump links
 - [ ] Collapsible tools
 - [ ] CSS styling
-- [ ] JavaScript navigation
+- [ ] JS navigation
 - [ ] Write tests
 
-### Module 7: CLI Commands
-**Owner**: _TBD_
+---
+
+## Milestone 7: Build CLI
+**Owner**: _____
 **Status**: 🔴 Not started
 
-- [ ] `generate` command implementation
-- [ ] `list` command implementation
+- [ ] `generate` command (full pipeline)
+- [ ] `list` command (find sessions)
 - [ ] Config file support
 - [ ] Error handling
 - [ ] Progress indicators
 - [ ] Write tests
 
-### Module 8: Utilities
-**Owner**: _TBD_
+---
+
+## Milestone 8: Polish & Ship
+**Owner**: Both
 **Status**: 🔴 Not started
 
-- [ ] OpenAI client wrapper
-- [ ] Session locator
-- [ ] File helpers
-- [ ] Config loader
-- [ ] Write tests
-
-## Documentation
-- [ ] Usage examples
-- [ ] API documentation
-- [ ] Template customization guide
-- [ ] PII redaction guide
-
-## Polish
 - [ ] End-to-end testing
-- [ ] Error handling
+- [ ] Error handling everywhere
 - [ ] Performance optimization
-- [ ] README examples with real output
+- [ ] Generate example blog posts
+- [ ] Update README with real examples
 - [ ] GitHub Actions CI/CD
-
-## Release
 - [ ] npm package setup
-- [ ] Version 1.0.0
-- [ ] Publish to npm
-- [ ] Announcement
+- [ ] Publish v1.0.0
 
 ---
 
@@ -135,6 +132,9 @@ Track what's done, in-progress, and todo.
 
 ---
 
-**Update this file as you complete tasks!**
-
-Assign owners, update status, check off tasks.
+**How to use**:
+1. Pick a milestone from [MILESTONES.md](./MILESTONES.md)
+2. Add your name as Owner
+3. Change Status to 🟡 In progress
+4. Check off tasks as you complete them
+5. Change Status to 🟢 Done when finished

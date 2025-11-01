@@ -34,8 +34,8 @@ blog-post-generator list
 
 **Read these docs in order:**
 
-1. **[PROJECT.md](./PROJECT.md)** - Core concept and architecture (5 min read)
-2. **[WORK_BREAKDOWN.md](./WORK_BREAKDOWN.md)** - Specific modules to build
+1. **[PROJECT.md](./PROJECT.md)** - Core concept (5 min read)
+2. **[MILESTONES.md](./MILESTONES.md)** - 8 milestones to build independently
 3. **[PROGRESS.md](./PROGRESS.md)** - Track what's done
 
 **Quick Start:**
@@ -47,7 +47,7 @@ npm run dev  # Watch mode
 npm test     # Run tests
 ```
 
-Pick a module from `WORK_BREAKDOWN.md` and build it. Update `PROGRESS.md` as you go.
+Pick a milestone from `MILESTONES.md`, claim it in `PROGRESS.md`, and build it.
 
 ## Tech Stack
 
