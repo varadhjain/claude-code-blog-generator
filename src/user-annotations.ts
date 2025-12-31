@@ -137,7 +137,7 @@ async function detectPhases(
     'phase-detection',
     PHASE_DETECTION_PROMPT,
     parts.join('\n'),
-    { temperature: 0.3, maxTokens: 1000 }
+    { temperature: 0.3, maxTokens: 8000 } // Increased for gpt-5-nano reasoning model
   );
 
   return result;
@@ -224,7 +224,7 @@ async function annotateWithContext(
     'contextual-annotation',
     CONTEXTUAL_ANNOTATION_PROMPT,
     parts.join('\n'),
-    { temperature: 0.3, maxTokens: 200 }
+    { temperature: 0.3, maxTokens: 2000 } // Increased for gpt-5-nano reasoning model
   );
 
   return result;
