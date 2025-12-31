@@ -7,7 +7,8 @@
     "blog-post-generator": "dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/cli/index.js",
+    "build": "tsc && npm run copy-templates",
+    "copy-templates": "mkdir -p dist/annotated-viewer/templates/components && mkdir -p dist/blog-summary/templates && cp -r src/annotated-viewer/templates/* dist/annotated-viewer/templates/ && cp -r src/blog-summary/templates/* dist/blog-summary/templates/",
     "build:ccblog": "bun build --compile --outfile ccblog ccblog.ts",
     "build:ccblog:macos": "bun build --compile --target=bun-darwin-arm64 --outfile ccblog-macos-arm64 ccblog.ts",
     "build:ccblog:linux": "bun build --compile --target=bun-linux-x64 --outfile ccblog-linux-x64 ccblog.ts",
@@ -50,10 +51,14 @@
   "dependencies": {
     "@inquirer/prompts": "^7.9.0",
     "dotenv": "^17.2.3",
+    "handlebars": "^4.7.8",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.1",
     "openai": "^4.104.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@types/handlebars": "^4.0.40",
     "@types/jest": "^29.5.14",
     "@types/node": "^24.9.2",
     "@types/yargs": "^17.0.33",

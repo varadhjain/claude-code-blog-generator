@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{sessionTitle}} - Claude Code Session</title>
+  {{{styles}}}
+</head>
+<body>
+  <div class="header">
+    <h1>{{sessionTitle}}</h1>
+    <p class="subtitle">
+      Claude Code Session
+      {{#if date}} · {{date}}{{/if}}
+      · Read in ~5 minutes
+    </p>
+  </div>
+
+  {{! Stats }}
+  {{{stats}}}
+
+  {{! Key Moments Timeline }}
+  <div class="timeline">
+    <h2>📍 Key Moments</h2>
+    {{#if moments}}
+      {{#each moments}}
+        <div class="moment {{color}}">
+          <span class="moment-time">{{time}}</span>
+          <span class="moment-annotation">{{annotation}}</span>
+          <a href="{{link}}" class="moment-link">View context →</a>
+        </div>
+      {{/each}}
+    {{else}}
+      <p class="text-muted">No key moments detected in this session.</p>
+    {{/if}}
+  </div>
+
+  {{! Phases }}
+  {{#if phases}}
+    {{{phaseNav}}}
+  {{/if}}
+
+  {{! Navigation to full session }}
+  <div class="nav">
+    <span></span>
+    <a href="page-001.html">View Full Session →</a>
+  </div>
+
+  <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #d0d7de; text-align: center; color: #586069; font-size: 0.875rem;">
+    <p>Generated with <a href="https://github.com/varadhjain/claude-code-blog-generator" target="_blank">Claude Code Blog Generator</a></p>
+    <p style="margin-top: 0.5rem;">AI-powered session annotation • Phase detection • Key moment extraction</p>
+  </footer>
+</body>
+</html>

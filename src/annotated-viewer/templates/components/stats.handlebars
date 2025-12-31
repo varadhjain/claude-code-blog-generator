@@ -1,0 +1,28 @@
+<div class="stats-bar">
+  <div class="stat">
+    <span class="stat-label">Messages</span>
+    <span class="stat-value">{{totalMessages}}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Duration</span>
+    <span class="stat-value">{{duration}}</span>
+  </div>
+  {{#if keyMoments}}
+  <div class="stat">
+    <span class="stat-label">Key Moments</span>
+    <span class="stat-value">{{keyMoments}}</span>
+  </div>
+  {{/if}}
+  {{#if phases}}
+  <div class="stat">
+    <span class="stat-label">Phases</span>
+    <span class="stat-value">{{phases}}</span>
+  </div>
+  {{/if}}
+  {{#if toolsUsed}}
+  <div class="stat">
+    <span class="stat-label">Tools Used</span>
+    <span class="stat-value">{{toolsUsed}}</span>
+  </div>
+  {{/if}}
+</div>

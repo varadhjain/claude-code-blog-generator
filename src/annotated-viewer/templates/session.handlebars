@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{sessionTitle}} - Page {{pageNumber}}</title>
+  {{{styles}}}
+</head>
+<body>
+  <div class="header">
+    <h1>{{sessionTitle}}</h1>
+    <p class="subtitle">
+      {{#if currentPhase}}Phase: {{currentPhase}} · {{/if}}
+      Page {{pageNumber}} of {{totalPages}}
+    </p>
+  </div>
+
+  {{! Keyboard Shortcuts Help }}
+  <div class="keyboard-shortcuts">
+    <strong>⌨️ Keyboard Shortcuts:</strong>
+    <span style="margin-left: 1rem;">
+      <kbd>F</kbd> Focus Mode
+      <span style="margin: 0 0.5rem;">•</span>
+      <kbd>E</kbd> Expand All
+      <span style="margin: 0 0.5rem;">•</span>
+      <kbd>C</kbd> Collapse All
+    </span>
+  </div>
+
+  {{! Focus Mode Toggle }}
+  <button class="focus-toggle" onclick="toggleFocusMode()">
+    <span id="focus-toggle-text">Focus Mode: OFF</span>
+  </button>
+
+  {{! Messages }}
+  <div id="messages-container">
+    {{#each messages}}
+      {{{this}}}
+    {{/each}}
+  </div>
+
+  {{! Navigation }}
+  <div class="nav">
+    <div>
+      {{#if prevPage}}
+        <a href="{{prevPage}}">← Previous</a>
+      {{else}}
+        <a href="index.html">← Summary</a>
+      {{/if}}
+    </div>
+    <div style="text-align: center; color: #586069; font-size: 0.875rem;">
+      Page {{pageNumber}} of {{totalPages}}
+    </div>
+    <div>
+      {{#if nextPage}}
+        <a href="{{nextPage}}">Next →</a>
+      {{else}}
+        <span style="color: #586069;">End of Session</span>
+      {{/if}}
+    </div>
+  </div>
+
+  <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #d0d7de; text-align: center; color: #586069; font-size: 0.875rem;">
+    <p>Generated with <a href="https://github.com/varadhjain/claude-code-blog-generator" target="_blank">Claude Code Blog Generator</a></p>
+  </footer>
+
+  {{! Focus Mode Script }}
+  <script>
+    let focusMode = false;
+
+    function toggleFocusMode() {
+      focusMode = !focusMode;
+      const nonKeyMessages = document.querySelectorAll('.message.non-key');
+      const toggleText = document.getElementById('focus-toggle-text');
+
+      nonKeyMessages.forEach(msg => {
+        msg.style.display = focusMode ? 'none' : 'block';
+      });
+
+      toggleText.textContent = focusMode ? 'Focus Mode: ON' : 'Focus Mode: OFF';
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // F key for focus mode
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFocusMode();
+      }
+    });
+
+    // Expand all keyboard shortcut (E key)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        document.querySelectorAll('details').forEach(details => {
+          details.open = true;
+        });
+      }
+    });
+
+    // Collapse all keyboard shortcut (C key)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        document.querySelectorAll('details').forEach(details => {
+          details.open = false;
+        });
+      }
+    });
+  </script>
+</body>
+</html>

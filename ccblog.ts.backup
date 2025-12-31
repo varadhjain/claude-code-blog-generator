@@ -8,7 +8,6 @@ import { analyzeSession } from './src/user-annotations';
 import { generateAnnotatedHTML, type SessionMessage } from './src/annotated-viewer/generator';
 import { uploadHTMLToGist } from './src/gist-uploader';
 import { OpenAIClient } from './src/ai/client';
-import { generateBlogSummary } from './src/blog-summary/generator';
 
 interface Project {
   name: string;
@@ -700,25 +699,6 @@ async function main() {
     console.log(`✅ HTML generated!`);
     console.log(`   📊 ${htmlOutput.pages.length} pages created`);
 
-    // Step 5.5: Generate blog summary
-    console.log(`\n📝 Generating blog summary...`);
-
-    const blogSummary = await generateBlogSummary(
-      messages,
-      annotations,
-      {
-        sessionId,
-        sessionTitle: selectedConversation.summary || selectedConversation.firstUserMessage || sessionId,
-        messagesPerPage: 50,
-        maxPromptsPerPhase: 5,
-        maxCodePerPhase: 2
-      }
-    );
-
-    console.log(`✅ Blog summary generated!`);
-    console.log(`   📝 Markdown: SUMMARY.md`);
-    console.log(`   🌐 HTML: summary.html`);
-
     // Step 6: Upload to Gist
     console.log(`\n☁️  Uploading to Gist...`);
 
@@ -727,9 +707,7 @@ async function main() {
       ...htmlOutput.pages.map(page => ({
         filename: page.filename,
         content: page.content
-      })),
-      { filename: 'SUMMARY.md', content: blogSummary.markdown },
-      { filename: 'summary.html', content: blogSummary.html }
+      }))
     ];
 
     const result = await uploadHTMLToGist(files, sessionId);
@@ -737,11 +715,7 @@ async function main() {
     console.log(`\n✅ Shared!`);
     console.log(`\n🔗 Gist URL: ${result.url}`);
     console.log(`👁️  Preview: ${result.previewUrl}`);
-    console.log(`\n💡 Tip: The Gist includes:`);
-    console.log(`   • SUMMARY.md - Quick overview blog post (Markdown)`);
-    console.log(`   • summary.html - Formatted blog summary (HTML)`);
-    console.log(`   • index.html - Full annotated session viewer`);
-    console.log(`   • Deep links from summary to key moments in the full session\n`);
+    console.log(`\n💡 Tip: Open the preview URL to view the annotated session with collapsible messages and key moments timeline.\n`);
 
   } catch (error) {
     console.error(`\n❌ Error during analysis or upload:\n`);

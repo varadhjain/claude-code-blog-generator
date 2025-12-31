@@ -1,0 +1,35 @@
+{{#if isKeyMessage}}
+  {{! Annotated message: expanded by default }}
+  <div class="message key {{annotationColor}}" id="msg-{{index}}">
+    {{#if annotation}}
+      <div class="annotation {{annotationColor}}">
+        {{#if (eq annotationColor "green")}}🟢{{/if}}
+        {{#if (eq annotationColor "yellow")}}🟡{{/if}}
+        {{#if (eq annotationColor "red")}}🔴{{/if}}
+        {{annotation}}
+      </div>
+    {{/if}}
+    <div class="message-header">
+      <span class="message-role">{{role}}</span>
+      {{#if timestamp}}
+        <span class="message-timestamp">{{timestamp}}</span>
+      {{/if}}
+    </div>
+    <div class="message-content">
+      {{{content}}}
+    </div>
+  </div>
+{{else}}
+  {{! Non-annotated message: collapsed by default }}
+  <details class="message non-key" id="msg-{{index}}">
+    <summary>
+      <span class="message-role">{{role}}</span>
+      {{#if timestamp}}
+        <span class="message-timestamp">· {{timestamp}}</span>
+      {{/if}}
+    </summary>
+    <div class="message-content">
+      {{{content}}}
+    </div>
+  </details>
+{{/if}}

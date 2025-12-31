@@ -248,19 +248,24 @@ export async function analyzeSession(
     throw new Error('No user messages found in session file');
   }
 
-  console.log(`📊 Found ${userMessages.length} user messages`);
-  console.log('');
+  console.log(`Found ${userMessages.length} user messages to analyze\n`);
 
   // PASS 1: Detect phases
-  console.log('🔍 Pass 1: Detecting phases and task boundaries...');
+  console.log('⏳ Pass 1 of 2: Detecting phases and task boundaries...');
   const phases = await detectPhases(client, userMessages);
-  console.log(`   Found ${phases.phases.length} phases`);
-  console.log(`   Task boundaries at messages: ${phases.taskBoundaries.join(', ')}`);
+  console.log(`✓ Identified ${phases.phases.length} distinct phases`);
+  if (phases.taskBoundaries.length > 0) {
+    console.log(`✓ Task boundaries: ${phases.taskBoundaries.join(', ')}`);
+  }
   console.log('');
 
   // PASS 2: Annotate each message with context
-  console.log('🎯 Pass 2: Annotating messages with adaptive context...');
+  console.log('⏳ Pass 2 of 2: Annotating messages with context...');
   const annotations: ContextualAnnotationResult[] = [];
+
+  // Calculate percentage markers for progress
+  const progressMarkers = [25, 50, 75];
+  let lastMarker = 0;
 
   for (let i = 0; i < userMessages.length; i++) {
     const currentMsg = userMessages[i];
@@ -294,12 +299,18 @@ export async function analyzeSession(
     });
 
     annotations.push(annotation);
-    console.log(
-      `   [${i + 1}/${userMessages.length}] Message #${currentMsg.index} → ${annotation.color}`
-    );
+
+    // Show progress at percentage markers
+    const percentage = Math.floor(((i + 1) / userMessages.length) * 100);
+    const nextMarker = progressMarkers.find(m => m > lastMarker && percentage >= m);
+
+    if (nextMarker) {
+      console.log(`   ${nextMarker}% complete (${i + 1}/${userMessages.length} messages annotated)`);
+      lastMarker = nextMarker;
+    }
   }
 
-  console.log('');
+  console.log(`✓ All ${userMessages.length} messages annotated\n`);
 
   // Calculate stats
   const stats = {

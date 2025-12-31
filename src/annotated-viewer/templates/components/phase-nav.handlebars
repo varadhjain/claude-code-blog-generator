@@ -1,0 +1,12 @@
+<div class="phases">
+  <h2>Phases Detected</h2>
+  {{#each phases}}
+    <div class="phase-card">
+      <h3>{{phaseId}}. {{phaseName}}</h3>
+      <p>{{description}}</p>
+      <p class="text-muted" style="font-size: 0.8rem; margin-top: 0.5rem;">
+        Messages: {{messageIndices.length}}
+      </p>
+    </div>
+  {{/each}}
+</div>

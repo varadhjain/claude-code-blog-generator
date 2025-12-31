@@ -1,0 +1,68 @@
+# {{title}}
+
+**Duration**: {{metadata.duration}} | **Messages**: {{metadata.messageCount}} | **Phases**: {{metadata.phaseCount}}
+
+---
+
+## What We Built
+
+{{goal.text}}
+
+---
+
+## The Journey
+
+{{#each phases}}
+### {{phaseName}}
+
+{{description}}
+
+{{#if ../promptsByPhase.[phaseId]}}
+**Key prompts:**
+{{#each ../promptsByPhase.[phaseId]}}
+- {{#if (eq color 'green')}}🟢{{else}}{{#if (eq color 'red')}}🔴{{else}}🟡{{/if}}{{/if}} "{{truncate text 200}}" _{{annotation}}_
+{{/each}}
+{{/if}}
+
+{{#if ../codeByPhase.[phaseId]}}
+**Code highlights:**
+{{#each (limit ../codeByPhase.[phaseId] 2)}}
+
+`{{context}}`
+
+```{{language}}
+{{truncate code 500}}
+```
+{{/each}}
+{{/if}}
+
+---
+
+{{/each}}
+
+## Outcome
+
+{{outcome.text}}
+
+{{#if outcome.lastPhase}}
+**Final phase**: {{outcome.lastPhase}}
+{{/if}}
+
+---
+
+## Session Details
+
+- **Total messages**: {{metadata.messageCount}}
+- **User messages analyzed**: {{metadata.userMessageCount}}
+- **Duration**: {{metadata.duration}}
+{{#if metadata.startTime}}
+- **Started**: {{formatDate metadata.startTime}}
+{{/if}}
+
+---
+
+{{#if gistUrl}}
+**[→ View full annotated session]({{gistUrl}})**
+{{/if}}
+
+_Generated with Claude Code Blog Generator_

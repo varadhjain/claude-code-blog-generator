@@ -114,7 +114,12 @@ export class OpenAIClient {
   constructor(tokenTracker?: TokenTracker) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY not found in environment variables');
+      throw new Error(
+        'OPENAI_API_KEY not found in environment variables.\n\n' +
+        '   Create a .env file in the project root:\n' +
+        '     OPENAI_API_KEY=sk-proj-...\n\n' +
+        '   Get your API key from: https://platform.openai.com/api-keys'
+      );
     }
 
     this.client = new OpenAI({ apiKey });
@@ -143,40 +148,81 @@ export class OpenAIClient {
       responseFormat = 'json_object',
     } = options;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-5-nano',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      // gpt-5-nano only supports temperature=1 (default), so we omit it
-      max_completion_tokens: maxTokens, // gpt-5-nano uses max_completion_tokens
-      response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-5-nano',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        // gpt-5-nano only supports temperature=1 (default), so we omit it
+        max_completion_tokens: maxTokens, // gpt-5-nano uses max_completion_tokens
+        response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
+      });
 
-    const usage = response.usage;
-    if (usage) {
-      const tokenUsage: TokenUsage = {
-        promptTokens: usage.prompt_tokens,
-        completionTokens: usage.completion_tokens,
-        totalTokens: usage.total_tokens,
-        cost:
-          usage.prompt_tokens * this.INPUT_COST_PER_TOKEN +
-          usage.completion_tokens * this.OUTPUT_COST_PER_TOKEN,
-      };
-      this.tokenTracker.track(promptType, tokenUsage);
+      const usage = response.usage;
+      if (usage) {
+        const tokenUsage: TokenUsage = {
+          promptTokens: usage.prompt_tokens,
+          completionTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+          cost:
+            usage.prompt_tokens * this.INPUT_COST_PER_TOKEN +
+            usage.completion_tokens * this.OUTPUT_COST_PER_TOKEN,
+        };
+        this.tokenTracker.track(promptType, tokenUsage);
+      }
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content in response from OpenAI API');
+      }
+
+      if (responseFormat === 'json_object') {
+        try {
+          return JSON.parse(content) as T;
+        } catch (parseError) {
+          throw new Error(`Failed to parse JSON response: ${content.substring(0, 200)}...`);
+        }
+      }
+
+      return content as T;
+    } catch (error: any) {
+      // Enhance error messages for common issues
+      if (error.code === 'insufficient_quota') {
+        throw new Error(
+          'OpenAI API quota exceeded.\n\n' +
+          '   Your OpenAI account has run out of credits.\n' +
+          '   Add credits at: https://platform.openai.com/account/billing'
+        );
+      }
+
+      if (error.code === 'invalid_api_key' || error.status === 401) {
+        throw new Error(
+          'Invalid OpenAI API key.\n\n' +
+          '   Check your .env file and verify the API key is correct.\n' +
+          '   Get a new key at: https://platform.openai.com/api-keys'
+        );
+      }
+
+      if (error.code === 'model_not_found') {
+        throw new Error(
+          'Model gpt-5-nano not found.\n\n' +
+          '   This model might not be available yet or your account may not have access.\n' +
+          '   Check OpenAI model availability at: https://platform.openai.com/docs/models'
+        );
+      }
+
+      if (error.message?.includes('ENOTFOUND') || error.message?.includes('ECONNREFUSED')) {
+        throw new Error(
+          'Cannot connect to OpenAI API.\n\n' +
+          '   Check your internet connection and try again.'
+        );
+      }
+
+      // Re-throw with original message if no specific handler
+      throw error;
     }
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No content in response');
-    }
-
-    if (responseFormat === 'json_object') {
-      return JSON.parse(content) as T;
-    }
-
-    return content as T;
   }
 
   /**

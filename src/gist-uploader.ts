@@ -143,3 +143,98 @@ function formatAsMarkdown(result: AnnotatorResult, sessionName: string): string 
 
   return lines.join('\n');
 }
+
+/**
+ * Upload multiple HTML files to GitHub Gist (for annotated viewer)
+ */
+export async function uploadHTMLToGist(
+  files: { filename: string; content: string }[],
+  sessionName: string,
+  options: GistUploadOptions = {}
+): Promise<GistUploadResult & { previewUrl: string }> {
+  // Check if gh CLI is installed
+  try {
+    execSync('gh --version', { stdio: 'ignore' });
+  } catch (error) {
+    throw new Error(
+      'GitHub CLI (gh) not found.\n\n' +
+      '   Install it:\n' +
+      '     • macOS: brew install gh\n' +
+      '     • Linux: https://github.com/cli/cli/blob/trunk/docs/install_linux.md\n' +
+      '     • Windows: https://github.com/cli/cli#installation\n\n' +
+      '   Then authenticate:\n' +
+      '     gh auth login'
+    );
+  }
+
+  // Check if authenticated
+  try {
+    execSync('gh auth status', { stdio: 'ignore' });
+  } catch (error) {
+    throw new Error(
+      'GitHub CLI not authenticated.\n\n' +
+      '   Run this command to authenticate:\n' +
+      '     gh auth login\n\n' +
+      '   Then try again.'
+    );
+  }
+
+  const tempFiles: string[] = [];
+
+  try {
+    console.log(`Creating temporary files...`);
+
+    // Write all files to temp directory
+    for (const file of files) {
+      const tempFile = path.join(os.tmpdir(), file.filename);
+      fs.writeFileSync(tempFile, file.content, 'utf-8');
+      tempFiles.push(tempFile);
+    }
+
+    console.log(`Uploading ${files.length} file${files.length !== 1 ? 's' : ''} to GitHub...`);
+
+    // Create gist with all files
+    const visibility = options.isPublic !== false ? '--public' : '--secret';
+    const description =
+      options.description || `Annotated Claude Code Session: ${sessionName}`;
+
+    const filesArg = tempFiles.map(f => `"${f}"`).join(' ');
+    const command = `gh gist create ${visibility} -d "${description}" ${filesArg}`;
+
+    const output = execSync(command, { encoding: 'utf-8' }).trim();
+
+    // Clean up temp files
+    tempFiles.forEach(f => {
+      if (fs.existsSync(f)) {
+        fs.unlinkSync(f);
+      }
+    });
+
+    // Generate preview URL
+    const gistId = output.split('/').pop();
+    const previewUrl = `https://gistpreview.github.io/?${gistId}/index.html`;
+
+    return {
+      url: output,
+      previewUrl
+    };
+  } catch (error) {
+    // Clean up temp files on error
+    tempFiles.forEach(f => {
+      if (fs.existsSync(f)) {
+        fs.unlinkSync(f);
+      }
+    });
+
+    // Provide more actionable error message
+    if (error instanceof Error && error.message.includes('rate limit')) {
+      throw new Error(
+        'GitHub API rate limit exceeded.\n\n' +
+        '   Wait a few minutes and try again.\n' +
+        '   Or authenticate with a GitHub token that has higher limits.'
+      );
+    }
+
+    throw new Error(`Failed to create gist: ${error}`);
+  }
+}
