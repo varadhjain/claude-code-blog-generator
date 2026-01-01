@@ -26,7 +26,6 @@ import {
 } from './formatter';
 import { generateMermaidDiagram, generateCompactMermaidDiagram } from './diagram-builder';
 import type { AnnotatorResult } from '../user-annotations';
-import { getInlineStyles } from '../annotated-viewer/styles';
 
 // ============================================================================
 // TYPES
@@ -153,12 +152,8 @@ export async function generateBlogSummary(
   // Generate Markdown
   const markdown = markdownTemplate(templateData);
 
-  // Generate HTML (with inline styles)
-  const styles = `<style>${getInlineStyles()}</style>`;
-  const html = htmlTemplate({
-    ...templateData,
-    styles
-  });
+  // Generate HTML
+  const html = htmlTemplate(templateData);
 
   return {
     markdown,
