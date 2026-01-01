@@ -141,6 +141,13 @@
     </div>
 
     <div class="blog-section">
+      <h2>🗺️ Session Flow</h2>
+      <div class="mermaid">
+{{{mermaidDiagram}}}
+      </div>
+    </div>
+
+    <div class="blog-section">
       <h2>🎯 What We Built</h2>
       <p>{{goal.text}}</p>
     </div>
@@ -217,5 +224,18 @@
       <p style="margin-top: 0.5rem;">AI-powered session analysis • Blog summary generation • Phase detection</p>
     </footer>
   </div>
+
+  <!-- Mermaid.js for diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        fontSize: '14px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif'
+      }
+    });
+  </script>
 </body>
 </html>
