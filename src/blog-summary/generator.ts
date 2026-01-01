@@ -24,7 +24,7 @@ import {
   formatDate,
   generateDeepLink
 } from './formatter';
-import { generateMermaidDiagram, generateCompactMermaidDiagram } from './diagram-builder';
+import { generateASCIIDiagram, generateFlowchartASCII } from './diagram-builder';
 import type { AnnotatorResult } from '../user-annotations';
 
 // ============================================================================
@@ -109,9 +109,12 @@ export async function generateBlogSummary(
   const codeSnippets = extractCodeSnippets(messages, options.maxCodePerPhase || 2);
   const metadata = extractMetadata(messages, annotations);
 
-  // Generate Mermaid diagram
-  const mermaidDiagram = generateMermaidDiagram(messages, annotations);
-  const compactDiagram = generateCompactMermaidDiagram(annotations);
+  // Generate ASCII diagrams
+  const asciiDiagram = generateASCIIDiagram(annotations, {
+    duration: metadata.duration,
+    messageCount: metadata.messageCount
+  });
+  const flowchartDiagram = generateFlowchartASCII(annotations);
 
   // Group by phase
   const promptsByPhase = groupByPhase(keyPrompts, annotations.phases.phases);
@@ -144,8 +147,8 @@ export async function generateBlogSummary(
     phases: annotations.phases.phases,
     promptsByPhase: promptsByPhaseObj,
     codeByPhase: codeByPhaseObj,
-    mermaidDiagram,
-    compactDiagram,
+    asciiDiagram,
+    flowchartDiagram,
     gistUrl: options.gistUrl
   };
 

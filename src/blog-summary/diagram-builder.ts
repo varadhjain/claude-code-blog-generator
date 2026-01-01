@@ -199,7 +199,113 @@ function truncateLabel(text: string, maxLength: number): string {
 }
 
 // ============================================================================
-// ALTERNATIVE: COMPACT DIAGRAM
+// ASCII TEXT DIAGRAMS
+// ============================================================================
+
+/**
+ * Generate ASCII tree diagram showing session structure
+ */
+export function generateASCIIDiagram(
+  annotations: AnnotatorResult,
+  metadata?: { duration?: string; messageCount?: number }
+): string {
+  const lines: string[] = [];
+
+  // Header
+  lines.push('Session Overview');
+  if (metadata?.duration || metadata?.messageCount) {
+    const details = [];
+    if (metadata.duration) details.push(metadata.duration);
+    if (metadata.messageCount) details.push(`${metadata.messageCount} messages`);
+    lines.push(`(${details.join(', ')})`);
+  }
+  lines.push('');
+
+  // Process phases
+  annotations.phases.phases.forEach((phase, phaseIndex) => {
+    const isLast = phaseIndex === annotations.phases.phases.length - 1;
+    const prefix = isLast ? '└─' : '├─';
+    const continuation = isLast ? '  ' : '│ ';
+
+    // Phase header
+    const phaseLabel = truncateLabel(phase.phaseName, 50);
+    lines.push(`${prefix} ${phaseLabel}`);
+
+    // Find key annotations in this phase
+    const phaseAnnotations = annotations.annotations.filter(
+      ann => phase.messageIndices.includes(ann.messageIndex)
+    );
+
+    // Show up to 3 key prompts
+    const keyPrompts = phaseAnnotations
+      .filter(ann => ann.color === 'green' || ann.color === 'red')
+      .slice(0, 3);
+
+    keyPrompts.forEach((prompt, promptIndex) => {
+      const isLastPrompt = promptIndex === keyPrompts.length - 1 && phaseAnnotations.length <= 3;
+      const promptPrefix = isLastPrompt ? '└─' : '├─';
+      const emoji = prompt.color === 'green' ? '🟢' : prompt.color === 'red' ? '🔴' : '🟡';
+      const annotation = truncateLabel(prompt.annotation, 45);
+      lines.push(`${continuation} ${promptPrefix} ${emoji} ${annotation}`);
+    });
+
+    // Add spacing between phases
+    if (!isLast) {
+      lines.push(continuation);
+    }
+  });
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate simple flowchart-style ASCII diagram
+ */
+export function generateFlowchartASCII(
+  annotations: AnnotatorResult
+): string {
+  const lines: string[] = [];
+  const boxWidth = 50;
+
+  // Helper to create a box
+  const createBox = (text: string, emoji: string = '') => {
+    const content = emoji ? `${emoji} ${text}` : text;
+    const truncated = truncateLabel(content, boxWidth - 4);
+    const padding = Math.max(0, boxWidth - truncated.length - 4);
+    const leftPad = Math.floor(padding / 2);
+    const rightPad = padding - leftPad;
+
+    return [
+      '┌' + '─'.repeat(boxWidth - 2) + '┐',
+      '│ ' + ' '.repeat(leftPad) + truncated + ' '.repeat(rightPad) + ' │',
+      '└' + '─'.repeat(boxWidth - 2) + '┘'
+    ];
+  };
+
+  // Start
+  lines.push(...createBox('Session Start', '▶️'));
+  lines.push(' '.repeat(Math.floor(boxWidth / 2) - 1) + '↓');
+  lines.push('');
+
+  // Phases
+  annotations.phases.phases.forEach((phase, index) => {
+    lines.push(...createBox(phase.phaseName));
+
+    if (index < annotations.phases.phases.length - 1) {
+      lines.push(' '.repeat(Math.floor(boxWidth / 2) - 1) + '↓');
+      lines.push('');
+    }
+  });
+
+  lines.push(' '.repeat(Math.floor(boxWidth / 2) - 1) + '↓');
+  lines.push('');
+  lines.push(...createBox('Complete', '✅'));
+
+  return lines.join('\n');
+}
+
+// ============================================================================
+// ALTERNATIVE: COMPACT DIAGRAM (MERMAID)
 // ============================================================================
 
 /**
