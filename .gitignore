@@ -52,5 +52,6 @@ output/
 !CLAUDE.md
 !SETUP.md
 !SECURITY.md
+!STATUS-*.md
 !docs/**/*.md
 annotations-output.json
