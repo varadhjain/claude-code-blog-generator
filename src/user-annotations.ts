@@ -79,16 +79,55 @@ export interface AnnotatorResult {
 // PASS 1: PHASE DETECTION
 // ============================================================================
 
-const PHASE_DETECTION_PROMPT = `You are an expert at identifying task boundaries in software development sessions.
+const PHASE_DETECTION_PROMPT = `You are an expert at identifying task boundaries and creating narrative-driven summaries of software development sessions.
 
-Your task: Analyze user messages and identify distinct phases/tasks.
+Your task: Analyze user messages and identify distinct phases with SPECIFIC, ACTION-ORIENTED names and descriptions.
 
 WHAT IS A PHASE?
-A phase is a cohesive unit of work where the user is focused on ONE goal:
-- "Initial project setup"
-- "Adding template system"
-- "Debugging model configuration"
-- "Preparing for deployment"
+A phase is a cohesive unit of work where the user is focused on ONE goal. Each phase should tell a mini-story.
+
+GOOD PHASE NAMES (specific, action-oriented, tell the story):
+✅ "Fixing gpt-5-nano token exhaustion: increasing from 1000→8000 tokens for reasoning overhead"
+✅ "Replacing Mermaid with ASCII diagrams after GistPreview blocked external scripts"
+✅ "Implementing deep links (page-XXX.html#msg-N) from summary to specific viewer messages"
+✅ "Debugging duplicate <style> tags that broke HTML rendering in summary.html"
+✅ "Pivoting from public blogger audience to internal team documentation focus"
+✅ "Building blog summary generator: extractGoal(), extractOutcome(), Handlebars templates"
+✅ "Deploying to GitHub Gist with uploadHTMLToGist() and testing live preview URLs"
+
+BAD PHASE NAMES (too generic, no specifics):
+❌ "Debugging model configuration" → WHAT was wrong? WHAT did you fix?
+❌ "Deployment and publishing workflow" → WHERE did you deploy? WHAT issue occurred?
+❌ "Vision and audience planning" → WHAT decision was made?
+❌ "UX design and feature ideation" → WHAT feature? WHAT design?
+❌ "Implementation work" → WHAT did you implement?
+❌ "Scoping internal-audience goals" → WHAT specific decision or pivot?
+❌ "Diagnosing API errors" → WHICH API? WHAT error?
+
+PHASE DESCRIPTIONS:
+Write descriptions that capture WHAT happened and WHY, with technical details.
+
+GOOD DESCRIPTIONS (tell the problem-solving story):
+✅ "gpt-5-nano reasoning model consumed all 1000 tokens for internal thinking, leaving zero for output. Error: 'No content in response'. Solution: Increased maxTokens from 1000→8000 for phase detection and 200→2000 for contextual annotations."
+✅ "Mermaid diagrams showed as raw code in GistPreview due to Content Security Policy blocking external mermaid.js script. Solution: Replaced with ASCII tree diagrams using box-drawing characters (├─, └─) for universal compatibility."
+✅ "User wanted deep links from blog summary to specific messages in paginated viewer. Implemented generateDeepLink() function calculating page-XXX.html#msg-N based on messagesPerPage=50, then updated both MD and HTML templates."
+
+BAD DESCRIPTIONS (just list categories):
+❌ "Configure deployment workflow and prepare for publishing"
+❌ "Design UX and plan features"
+❌ "Assess what's pending, plan improvements, define target users"
+❌ "Coordinate debugging and provide assistance"
+
+PHASE NAMING RULES:
+1. Use verbs that describe the ACTION taken (fixing, implementing, debugging, switching, adding)
+2. Include SPECIFIC technologies, tools, or components (e.g., "gpt-5-nano", "Handlebars", "GistPreview", "ASCII diagrams")
+3. If debugging/fixing, mention WHAT ERROR occurred (e.g., "token exhaustion", "404 links", "CSP blocking scripts")
+4. If implementing, mention WHAT EXACTLY was built (e.g., "generateDeepLink() function", "summary.md.hbs template")
+5. If a decision/pivot, state WHAT changed (e.g., "from Mermaid → ASCII", "from public → internal audience")
+6. Extract technical details from user messages - look for error messages, file names, function names, numbers, URLs
+7. Keep it scannable but information-dense - someone should understand WHAT happened and WHY from the name alone
+
+CRITICAL: Read the user messages carefully and extract concrete details. If user says "the links didn't work, got 404", your phase name should mention "fixing 404 errors in deep links", NOT "debugging navigation issues".
 
 TASK BOUNDARIES (Green candidates):
 These are messages where the user:
@@ -114,7 +153,7 @@ async function detectPhases(
   ];
 
   messages.forEach((msg) => {
-    const content = msg.content.length > 200 ? msg.content.slice(0, 200) + '...' : msg.content;
+    const content = msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content;
     parts.push(`${msg.index}. ${content}`);
   });
 
@@ -224,7 +263,7 @@ async function annotateWithContext(
     'contextual-annotation',
     CONTEXTUAL_ANNOTATION_PROMPT,
     parts.join('\n'),
-    { temperature: 0.3, maxTokens: 2000 } // Increased for gpt-5-nano reasoning model
+    { temperature: 0.3, maxTokens: 8000 } // High limit for gpt-5-nano to capture detailed annotations with reasoning
   );
 
   return result;

@@ -69,37 +69,55 @@ export interface SessionMetadata {
 
 /**
  * Extract the session goal from annotations or first user message
+ * Synthesizes a clear goal statement from available context
  */
 export function extractGoal(
   messages: SessionMessage[],
   annotations: AnnotatorResult
 ): ExtractedGoal {
-  // Strategy 1: Use first green annotation (new task start)
-  const firstGreen = annotations.annotations.find(a => a.color === 'green');
-  if (firstGreen) {
-    return {
-      text: firstGreen.content,
-      messageIndex: firstGreen.messageIndex,
-      source: 'annotation'
-    };
-  }
-
-  // Strategy 2: Use first user message
   const firstUserMsg = messages.find(m => m.message?.role === 'user');
-  if (firstUserMsg && firstUserMsg.message?.content) {
-    const content = extractTextContent(firstUserMsg.message.content);
-    return {
-      text: content.substring(0, 500), // Limit length
-      messageIndex: firstUserMsg.index,
-      source: 'first_message'
-    };
+  const firstPhase = annotations.phases.phases[0];
+  const firstGreen = annotations.annotations.find(a => a.color === 'green');
+
+  // Synthesize goal from multiple sources
+  let goalText = '';
+  let messageIndex = 0;
+
+  if (firstPhase && firstUserMsg) {
+    // Combine first phase name with user intent
+    const userContent = extractTextContent(firstUserMsg.message!.content);
+    const firstSentence = userContent.split(/[.!?]/)[0].trim();
+
+    // If first phase gives us specific action, use it as primary goal
+    if (firstPhase.phaseName.length > 20 && firstPhase.phaseName.length < 100) {
+      goalText = `${firstPhase.phaseName}. ${firstPhase.description}`;
+    } else if (firstSentence.length < 200) {
+      // Use first user message sentence if it's concise
+      goalText = firstSentence;
+    } else {
+      // Fall back to first phase description
+      goalText = firstPhase.description;
+    }
+    messageIndex = firstUserMsg.index;
+  } else if (firstGreen) {
+    // Use first green annotation with its context
+    goalText = `${firstGreen.annotation}: ${firstGreen.content.substring(0, 300)}`;
+    messageIndex = firstGreen.messageIndex;
+  } else if (firstUserMsg) {
+    // Use first user message, but try to extract the core ask
+    const content = extractTextContent(firstUserMsg.message!.content);
+    const firstSentence = content.split(/[.!?]/)[0].trim();
+    goalText = firstSentence.length < 300 ? firstSentence : content.substring(0, 300);
+    messageIndex = firstUserMsg.index;
+  } else {
+    // Fallback
+    goalText = 'Session analysis';
   }
 
-  // Fallback
   return {
-    text: 'Session analysis',
-    messageIndex: 0,
-    source: 'first_message'
+    text: goalText,
+    messageIndex,
+    source: firstPhase ? 'annotation' : 'first_message'
   };
 }
 
@@ -109,33 +127,61 @@ export function extractGoal(
 
 /**
  * Extract the session outcome from last phase or final messages
+ * Synthesizes what was accomplished with specific details
  */
 export function extractOutcome(
   messages: SessionMessage[],
   annotations: AnnotatorResult
 ): ExtractedOutcome {
   const { phases } = annotations.phases;
+  const lastPhase = phases.length > 0 ? phases[phases.length - 1] : undefined;
 
-  // Strategy 1: Use last phase description
-  if (phases.length > 0) {
-    const lastPhase = phases[phases.length - 1];
-    return {
-      text: lastPhase.description,
-      lastPhase: lastPhase.phaseName,
-      source: 'last_phase'
-    };
+  // Get session stats to understand what was accomplished
+  const greenCount = annotations.stats.greenCount;
+  const phaseCount = phases.length;
+
+  // Synthesize outcome from multiple signals
+  let outcomeText = '';
+
+  if (lastPhase) {
+    // Start with what the last phase accomplished
+    outcomeText = `Completed ${lastPhase.phaseName.toLowerCase()}. `;
+
+    // Add phase description if it provides specific details
+    if (lastPhase.description &&
+        lastPhase.description !== lastPhase.phaseName &&
+        lastPhase.description.length > 30) {
+      outcomeText += lastPhase.description;
+    }
+
+    // Add session-level summary
+    if (phaseCount > 1) {
+      outcomeText += ` Overall, worked through ${phaseCount} distinct phases`;
+      if (greenCount > 0) {
+        outcomeText += ` covering ${greenCount} major tasks`;
+      }
+      outcomeText += '.';
+    }
+  } else {
+    // No phases detected - synthesize from final messages
+    const userMessages = messages.filter(m => m.message?.role === 'user');
+    const lastUserMessages = userMessages.slice(-2);
+
+    if (lastUserMessages.length > 0) {
+      const finalContent = lastUserMessages
+        .map(m => extractTextContent(m.message!.content))
+        .join(' ')
+        .substring(0, 400);
+      outcomeText = `Session ended with: ${finalContent}`;
+    } else {
+      outcomeText = 'Session completed';
+    }
   }
 
-  // Strategy 2: Use last few user messages
-  const userMessages = messages.filter(m => m.message?.role === 'user');
-  const lastUserMessages = userMessages.slice(-3);
-  const outcomeText = lastUserMessages
-    .map(m => extractTextContent(m.message!.content))
-    .join(' ');
-
   return {
-    text: outcomeText.substring(0, 500),
-    source: 'last_messages'
+    text: outcomeText,
+    lastPhase: lastPhase?.phaseName,
+    source: lastPhase ? 'last_phase' : 'last_messages'
   };
 }
 
