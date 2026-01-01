@@ -20,7 +20,7 @@
 {{#if ../promptsByPhase.[phaseId]}}
 **Key prompts:**
 {{#each ../promptsByPhase.[phaseId]}}
-- {{#if (eq color 'green')}}🟢{{else}}{{#if (eq color 'red')}}🔴{{else}}🟡{{/if}}{{/if}} "{{truncate text 200}}" _{{annotation}}_
+- {{#if (eq color 'green')}}🟢{{else}}{{#if (eq color 'red')}}🔴{{else}}🟡{{/if}}{{/if}} "{{truncate text 200}}" _{{annotation}}_ [[→ see context]({{deepLink}})]
 {{/each}}
 {{/if}}
 
@@ -61,8 +61,6 @@
 
 ---
 
-{{#if gistUrl}}
-**[→ View full annotated session]({{gistUrl}})**
-{{/if}}
+**[→ View full annotated session](index.html)**
 
 _Generated with Claude Code Blog Generator_

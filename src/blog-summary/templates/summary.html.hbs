@@ -157,8 +157,8 @@
             <strong>Key prompts:</strong>
             {{#each ../promptsByPhase.[phaseId]}}
               <div class="prompt-item {{color}}">
-                <div class="prompt-text">"{{text}}"</div>
-                <div class="prompt-annotation">{{annotation}}</div>
+                <div class="prompt-text">"{{truncate text 200}}"</div>
+                <div class="prompt-annotation">{{annotation}} <a href="{{deepLink}}" style="color: #0969da; text-decoration: none;">→ see context</a></div>
               </div>
             {{/each}}
           </div>
@@ -206,13 +206,11 @@
       </ul>
     </div>
 
-    {{#if gistUrl}}
-      <div style="text-align: center;">
-        <a href="{{gistUrl}}" class="view-full-session">
-          View Full Annotated Session →
-        </a>
-      </div>
-    {{/if}}
+    <div style="text-align: center;">
+      <a href="index.html" class="view-full-session">
+        View Full Annotated Session →
+      </a>
+    </div>
 
     <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #d0d7de; text-align: center; color: #586069; font-size: 0.875rem;">
       <p>Generated with <a href="https://github.com/varadhjain/claude-code-blog-generator" target="_blank">Claude Code Blog Generator</a></p>

@@ -15,14 +15,14 @@ import {
   extractMetadata,
   groupByPhase,
   type SessionMessage,
-  type KeyPrompt,
   type CodeSnippet,
   type SessionMetadata
 } from './extractor';
 import {
   truncateText,
   formatCodeSnippet,
-  formatDate
+  formatDate,
+  generateDeepLink
 } from './formatter';
 import type { AnnotatorResult } from '../user-annotations';
 import { getInlineStyles } from '../annotated-viewer/styles';
@@ -114,9 +114,12 @@ export async function generateBlogSummary(
   const codeByPhase = groupByPhase(codeSnippets, annotations.phases.phases);
 
   // Convert to plain objects for template (Handlebars can't iterate Map directly)
-  const promptsByPhaseObj: Record<number, KeyPrompt[]> = {};
+  const promptsByPhaseObj: Record<number, any[]> = {};
   promptsByPhase.forEach((prompts, phaseId) => {
-    promptsByPhaseObj[phaseId] = prompts;
+    promptsByPhaseObj[phaseId] = prompts.map(prompt => ({
+      ...prompt,
+      deepLink: generateDeepLink(prompt.messageIndex, options.messagesPerPage || 50)
+    }));
   });
 
   const codeByPhaseObj: Record<number, CodeSnippet[]> = {};
