@@ -12,32 +12,37 @@ Transform your Claude Code sessions into shareable blog posts and annotated HTML
 
 ## Quick Start
 
-### 1. Install
+### Option 1: Guided Setup (Recommended)
 
 ```bash
+# Install
 npm install -g claude-code-blog-generator
+
+# Run setup wizard
+ccblog --setup
 ```
 
-Or use directly with npx:
+The wizard will:
+- ✅ Check Node.js version
+- ✅ Help you set up your OpenAI API key
+- ✅ Test the API connection
+- ✅ Check for GitHub CLI (optional)
+- ✅ Verify Claude Code sessions exist
+
+### Option 2: Manual Setup
 
 ```bash
-npx claude-code-blog-generator
-```
+# Install
+npm install -g claude-code-blog-generator
 
-### 2. Set up API key
-
-```bash
-# Create .env file (or export environment variable)
+# Set up API key
 echo "OPENAI_API_KEY=sk-proj-..." > .env
+
+# Run
+ccblog
 ```
 
 Get your OpenAI API key at https://platform.openai.com/api-keys
-
-### 3. Run the CLI
-
-```bash
-ccblog
-```
 
 That's it! The interactive TUI will:
 - ✅ Auto-discover all your Claude Code sessions
@@ -82,6 +87,14 @@ Full conversation split into digestible 50-message pages with:
 
 ## Usage
 
+### Commands
+
+```bash
+ccblog              # Start interactive session picker
+ccblog --setup      # Run setup wizard
+ccblog --help       # Show help
+```
+
 ### Interactive Mode (recommended)
 
 ```bash
@@ -93,6 +106,29 @@ The TUI will guide you through:
 2. Optional: custom session title
 3. Analysis progress with real-time stats
 4. Upload to Gist or save locally
+
+### Setup Wizard
+
+```bash
+ccblog --setup
+```
+
+**Perfect for Claude Code to help users!** The wizard:
+- Checks all prerequisites (Node.js, API key, GitHub CLI)
+- Guides through API key setup with clear instructions
+- Tests the connection to make sure everything works
+- Provides helpful error messages if something's wrong
+- Can save API key to `.env` automatically
+
+**Example conversation:**
+```
+User: "Help me set up the blog generator"
+Claude: "Let's run the setup wizard! Please run: ccblog --setup"
+User: [runs ccblog --setup]
+Claude: "Great! The wizard will guide you through each step.
+         When it asks for your API key, get one from
+         https://platform.openai.com/api-keys"
+```
 
 ### Programmatic Usage
 

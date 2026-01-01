@@ -13,6 +13,7 @@ import { generateAnnotatedHTML, type SessionMessage } from '../annotated-viewer/
 import { generateBlogSummary } from '../blog-summary/generator';
 import { uploadHTMLToGist } from '../gist-uploader';
 import { OpenAIClient } from '../ai/client';
+import { runSetupWizard, quickSetupCheck } from './setup-wizard';
 
 // ============================================================================
 // SESSION DISCOVERY
@@ -226,6 +227,33 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
 // ============================================================================
 
 async function main() {
+  // Check for --setup flag
+  const args = process.argv.slice(2);
+  if (args.includes('--setup') || args.includes('-s')) {
+    const result = await runSetupWizard();
+    if (!result.success) {
+      process.exit(1);
+    }
+    // If setup succeeded and user wants to continue, proceed to main flow
+    // Otherwise exit
+    return;
+  }
+
+  // Check for --help flag
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log('Claude Code Blog Generator - Transform Claude sessions into blog posts\n');
+    console.log('Usage:');
+    console.log('  ccblog           Start interactive session picker');
+    console.log('  ccblog --setup   Run setup wizard');
+    console.log('  ccblog --help    Show this help\n');
+    console.log('Quick setup:');
+    console.log('  1. Install: npm install -g claude-code-blog-generator');
+    console.log('  2. Setup: ccblog --setup');
+    console.log('  3. Run: ccblog\n');
+    console.log('Documentation: https://github.com/varadhjain/claude-code-blog-generator\n');
+    return;
+  }
+
   console.clear();
   console.log('╔═══════════════════════════════════════════════════════════╗');
   console.log('║                                                           ║');
@@ -236,14 +264,29 @@ async function main() {
   console.log('║                                                           ║');
   console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
-  // Check for API key
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ Error: OPENAI_API_KEY not found in environment');
-    console.error('\nPlease set your OpenAI API key:');
-    console.error('  export OPENAI_API_KEY=sk-proj-...\n');
-    console.error('Or create a .env file with:');
-    console.error('  OPENAI_API_KEY=sk-proj-...\n');
-    process.exit(1);
+  // Quick setup check
+  const { ready, issues } = await quickSetupCheck();
+  if (!ready) {
+    console.error('⚠️  Setup incomplete:\n');
+    issues.forEach(issue => console.error(`   • ${issue}`));
+    console.error('');
+
+    const runSetup = await confirm({
+      message: 'Run setup wizard now?',
+      default: true
+    });
+
+    if (runSetup) {
+      console.log('');
+      const result = await runSetupWizard();
+      if (!result.success) {
+        process.exit(1);
+      }
+      // Continue to main flow if setup succeeded
+    } else {
+      console.error('\nRun `ccblog --setup` when ready.\n');
+      process.exit(1);
+    }
   }
 
   // Discover sessions
