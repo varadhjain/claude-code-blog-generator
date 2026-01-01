@@ -51,5 +51,6 @@ output/
 !README.md
 !CLAUDE.md
 !SETUP.md
+!SECURITY.md
 !docs/**/*.md
 annotations-output.json

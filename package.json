@@ -4,7 +4,7 @@
   "description": "Transform Claude Code sessions into engaging, educational blog posts with intelligent narrative chunking and PII redaction",
   "main": "dist/index.js",
   "bin": {
-    "blog-post-generator": "dist/cli/index.js"
+    "ccblog": "dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc && npm run copy-templates",

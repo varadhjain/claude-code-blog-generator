@@ -1,152 +1,314 @@
-# Claude Code Session Analyzer
+# Claude Code Blog Generator
 
-Turn your Claude Code conversations into shareable, annotated HTML viewers.
+Transform your Claude Code sessions into shareable blog posts and annotated HTML viewers — perfect for teams documenting "what we built and how we did it."
 
-## Quick Start - Annotated Viewer
+**✨ Features:**
+- 🤖 AI-powered session analysis (detects phases, key prompts, decisions)
+- 📝 Generates blog summaries (Markdown + HTML)
+- 🎨 Beautiful annotated HTML viewer with timeline navigation
+- 🔗 Deep links from summary to specific conversation moments
+- ☁️ One-click upload to GitHub Gist for easy sharing
+- 💰 Ultra-low cost (~$0.001 per session using gpt-5-nano)
 
-The annotated viewer analyzes your Claude Code sessions and generates an interactive HTML viewer with:
-- Color-coded key moments (new tasks, clarifications, pivots)
-- Phase detection (setup, debugging, refactoring, etc.)
-- Timeline navigation with clickable moments
-- Paginated messages with collapsible content
-- Automatic upload to GitHub Gist
+## Quick Start
 
-### Usage
+### 1. Install
 
 ```bash
-# Interactive mode - choose project and session
-npm run annotate
-
-# Direct file mode - convert to markdown
-npx ts-node ccblog.ts ~/.claude/projects/my-project/session-123.jsonl > output.md
-
-# Help
-npx ts-node ccblog.ts --help
+npm install -g claude-code-blog-generator
 ```
 
-### What Happens
+Or use directly with npx:
 
-1. **Select a session**: Pick from your `~/.claude/projects/` conversations
-2. **AI Analysis**: Two-pass analysis detects phases and annotates key messages
-3. **HTML Generation**: Creates index.html (summary) + paginated conversation pages
-4. **Gist Upload**: Uploads to GitHub and gives you a preview URL
+```bash
+npx claude-code-blog-generator
+```
 
-### Example Output
+### 2. Set up API key
 
-After running `npm run annotate`, you'll see:
+```bash
+# Create .env file (or export environment variable)
+echo "OPENAI_API_KEY=sk-proj-..." > .env
+```
+
+Get your OpenAI API key at https://platform.openai.com/api-keys
+
+### 3. Run the CLI
+
+```bash
+ccblog
+```
+
+That's it! The interactive TUI will:
+- ✅ Auto-discover all your Claude Code sessions
+- ✅ Let you pick which one to analyze
+- ✅ Run AI analysis (2-pass: phase detection → contextual annotations)
+- ✅ Generate blog summary + annotated HTML viewer
+- ✅ Upload to GitHub Gist (optional)
+
+## What You Get
+
+After analysis, you get 4 files:
+
+### 1. `SUMMARY.md` - Quick Blog Post
+Narrative-driven summary with:
+- Session goal and outcome
+- ASCII diagram showing session flow
+- Key phases with specific, action-oriented names
+- Important prompts and decisions
+- Code snippets
+- Deep links to full session
+
+**Example phase names:**
+- ✅ "Fixing gpt-5-nano token exhaustion: increasing from 1000→8000 tokens for reasoning overhead"
+- ✅ "Replacing Mermaid with ASCII diagrams after GistPreview blocked external scripts"
+- ✅ "Debugging duplicate \<style\> tags that broke HTML rendering"
+
+### 2. `summary.html` - Formatted Blog Summary
+Beautiful HTML version of the blog summary with syntax highlighting
+
+### 3. `index.html` - Annotated Session Viewer
+Interactive HTML viewer with:
+- Timeline of key moments (color-coded: 🟢 new tasks, 🟡 clarifications, 🔴 pivots)
+- Phase navigation
+- Collapsible messages
+- Search and filter
+
+### 4. `page-XXX.html` - Paginated Conversation
+Full conversation split into digestible 50-message pages with:
+- Syntax-highlighted code blocks
+- Tool use/result blocks
+- Deep-linkable messages (#msg-142)
+
+## Usage
+
+### Interactive Mode (recommended)
+
+```bash
+ccblog
+```
+
+The TUI will guide you through:
+1. Picking a session from your `~/.claude/projects/` directory
+2. Optional: custom session title
+3. Analysis progress with real-time stats
+4. Upload to Gist or save locally
+
+### Programmatic Usage
+
+```typescript
+import { analyzeSession } from 'claude-code-blog-generator';
+import { OpenAIClient } from 'claude-code-blog-generator/ai';
+
+const client = new OpenAIClient();
+const result = await analyzeSession(client, {
+  sessionPath: '/path/to/session.jsonl',
+  contextWindow: 3
+});
+
+console.log(`Detected ${result.phases.phases.length} phases`);
+```
+
+## Requirements
+
+- **Node.js** 18+ or Bun
+- **OpenAI API key** - gpt-5-nano model (released August 2025)
+- **GitHub CLI** (optional, for Gist upload) - `brew install gh` or https://cli.github.com/
+
+## Cost
+
+Uses **gpt-5-nano** exclusively:
+- **Pricing**: $0.05/1M input tokens, $0.40/1M output tokens
+- **Typical session** (200 messages): ~$0.001
+- **Well under target** of $0.01 per session
+
+Example breakdown:
+- Meta-analysis: ~4k tokens = $0.0003
+- Phase classification: ~500 tokens per window = $0.00003
+- **Total for 150-message session**: ~$0.001
+
+## How It Works
+
+### Two-Pass AI Analysis
+
+**Pass 1: Phase Detection**
+- Analyzes user messages to identify task boundaries
+- Generates specific, action-oriented phase names
+- Example: "Implementing deep links (page-XXX.html#msg-N) from summary to specific viewer messages"
+
+**Pass 2: Contextual Annotations**
+- Annotates each message with color coding:
+  - 🟢 **Green**: New task start
+  - 🟡 **Yellow**: Clarification or steering
+  - 🔴 **Red**: Pivot or major change
+- Extracts reasoning and key quotes
+
+### Smart Summarization
+
+The blog summary generator:
+- **Synthesizes goal** from first phase + user intent (doesn't just copy first message)
+- **Groups content by phase** for narrative flow
+- **Extracts key prompts** with annotations
+- **Pulls code snippets** from tool_use/tool_result blocks
+- **Generates ASCII diagrams** for session flow visualization
+- **Creates deep links** to specific messages in paginated viewer
+
+## Examples
+
+### Generated Gist
+
+See a live example: [Sample Session Analysis](https://gist.github.com/varadhjain/403f012649b153984ff46284e8cfc430)
+
+Preview the annotated viewer: [GistPreview Link](https://gistpreview.github.io/?403f012649b153984ff46284e8cfc430/index.html)
+
+### Sample Output
 
 ```
+🚀 Analyzing current session...
+
+1. Parsing session file...
+✅ Parsed 625 messages
+
+2. Analyzing session with AI...
+⏳ Pass 1: Detecting phases...
+✓ Identified 10 distinct phases
+
+⏳ Pass 2: Annotating messages...
+✓ All 12 user messages annotated
+
 ✅ Analysis complete!
-   🟢 5 new tasks
-   🟡 3 clarifications
-   🔴 1 pivots
-   📋 4 phases detected
+   🟢 3 new tasks
+   🟡 9 clarifications
+   🔴 0 pivots
+   📋 10 phases detected
 
-📄 Generating annotated HTML...
-✅ HTML generated!
-   📊 4 pages created
+3. Generating blog summary...
+✅ Blog summary generated!
 
-☁️  Uploading to Gist...
-✅ Shared!
+4. Uploading to Gist...
+✅ Success!
 
 🔗 Gist URL: https://gist.github.com/...
-👁️  Preview: https://bl.ocks.org/.../index.html
-
-💡 Tip: Open the preview URL to view the annotated session with collapsible messages and key moments timeline.
+👁️  Preview: https://gistpreview.github.io/...
 ```
 
-The preview URL shows an interactive viewer where:
-- **index.html** = Summary page with stats, timeline, and phase overview
-- **page-001.html** = First 50 messages of the conversation
-- **page-002.html** = Next 50 messages, etc.
-- Key moments are highlighted and clickable from the timeline
+## Security & Privacy
 
-### Cost
+### API Key Safety
 
-- ~$0.0017 per session (using gpt-4o-mini)
-- Typical 200-message session costs less than a penny
+✅ **Your API keys are safe:**
+- Keys are read from `.env` file or environment variables (NEVER hardcoded)
+- `.env` is in `.gitignore` - will never be committed to git
+- CLI never logs or displays your API key
+- Generated Gists DO NOT contain API keys
 
-## 2. Blog Post Generation (ORIGINAL)
+⚠️ **Important:**
+- Never commit your `.env` file
+- Never share your `.env` file or API keys
+- If you accidentally expose a key, regenerate it immediately at https://platform.openai.com/api-keys
 
-**Convert sessions to blog posts**
+### Session Privacy
 
-```bash
-npm run sidebar    # Generate sidebar
-npm run workflow   # Interactive mode
+⚠️ **Claude session files may contain sensitive information:**
+- Private code, API keys, credentials, personal data
+- `.jsonl` files are gitignored by default
+- When uploading to Gist, review the output first
+- Consider using private Gists for sensitive sessions
+
+**To create private Gist:**
+Edit `src/gist-uploader.ts` and change:
+```typescript
+const createCmd = `gh gist create --public ...`;
+// to:
+const createCmd = `gh gist create ...`; // Private by default
 ```
 
-**Files:**
-- `scripts/blog-generation/` - CLI tools
-- `src/analyzer/blog-generation/` - Analysis
-- `src/prompts/blog-generation/` - AI prompts
+### What Gets Shared
 
-## Setup
+When you upload to Gist, these files are shared:
+- ✅ `SUMMARY.md` - Blog summary (safe, high-level)
+- ✅ `summary.html` - Formatted summary (safe)
+- ⚠️ `index.html` + `page-*.html` - Full conversation (may contain sensitive info)
 
-```bash
-# Install dependencies
-npm install
-
-# Add OpenAI key (required for AI analysis)
-echo "OPENAI_API_KEY=sk-proj-..." > .env
-
-# Authenticate GitHub CLI (required for Gist upload)
-gh auth login
-```
-
-### Requirements
-
-- **Node.js** 18+ or **Bun** runtime
-- **OpenAI API key** - Get one at https://platform.openai.com/api-keys
-- **GitHub CLI** - Install with `brew install gh` (macOS) or see https://cli.github.com/
-- **Claude Code** - Must have run at least one session to have `.jsonl` files in `~/.claude/projects/`
+**Recommendation:** Review generated files before uploading. Use `Save locally` option if session contains sensitive data.
 
 ## Troubleshooting
 
-### "No Claude Code projects found"
-- Make sure you've run Claude Code at least once: `c` or `claude-code`
-- Check that `~/.claude/projects/` exists and contains project directories
+### "No sessions found"
+Make sure you've run Claude Code at least once. Sessions are stored in `~/.claude/projects/`
 
 ### "OPENAI_API_KEY not found"
-- Create a `.env` file in the project root
-- Add your key: `OPENAI_API_KEY=sk-proj-...`
-- Get a key at https://platform.openai.com/api-keys
+Create a `.env` file with:
+```
+OPENAI_API_KEY=sk-proj-...
+```
 
-### "gh: command not found" or Gist upload fails
-- Install GitHub CLI: `brew install gh` (macOS) or visit https://cli.github.com/
-- Authenticate: `gh auth login`
-- Make sure you grant the `gist` scope when authenticating
+### "No content in response from OpenAI API"
+This happens when gpt-5-nano reasoning model exhausts tokens. The CLI now uses 8000 tokens (plenty of room).
 
-### Analysis is slow or expensive
-- The tool uses gpt-4o-mini (very cheap and fast)
-- A typical 200-message session costs < $0.002
-- If you have a very long session (500+ messages), it may take 10-30 seconds
+### Gist upload fails
+Install GitHub CLI and authenticate:
+```bash
+brew install gh
+gh auth login
+```
+Make sure you grant the `gist` scope when authenticating.
 
-### HTML viewer doesn't render properly
-- GitHub Gist has a file size limit (1MB per file)
-- Very long sessions may need to be split into more pages
-- Try using the preview URL (bl.ocks.org) instead of the raw Gist URL
+## Development
 
-## Architecture
+### Setup
 
-**Key Files:**
-- `ccblog.ts` - Main CLI tool (interactive + direct file mode)
-- `src/user-annotations.ts` - Two-pass AI analysis (phase detection + annotation)
-- `src/annotated-viewer/generator.ts` - HTML generation with Handlebars templates
-- `src/gist-uploader.ts` - GitHub Gist upload via gh CLI
-- `src/annotated-viewer/templates/` - Handlebars templates for HTML output
+```bash
+git clone https://github.com/varadhjain/claude-code-blog-generator.git
+cd claude-code-blog-generator
+npm install
+echo "OPENAI_API_KEY=sk-proj-..." > .env
+```
 
-## Next Steps
+### Build
 
-See [HANDOFF.md](HANDOFF.md) for vision & roadmap (AmpCode-style viewer)
+```bash
+npm run build
+```
 
-## Tech Stack
+### Run locally
 
-- **TypeScript** - Type-safe development
-- **gpt-4o-mini** - Cost-effective AI analysis
-- **Handlebars** - HTML templating
-- **marked** - Markdown to HTML conversion
-- **GitHub CLI** - Gist upload and sharing
+```bash
+npm link
+ccblog
+```
+
+### Project Structure
+
+```
+src/
+├── cli/                     # Interactive TUI CLI
+│   └── index.ts
+├── user-annotations.ts      # Two-pass AI analysis
+├── blog-summary/            # Blog post generation
+│   ├── generator.ts         # Main orchestrator
+│   ├── extractor.ts         # Extract goal, outcome, prompts
+│   ├── formatter.ts         # Text/code formatting
+│   ├── diagram-builder.ts   # ASCII diagrams
+│   └── templates/           # Handlebars templates
+│       ├── summary.md.hbs
+│       └── summary.html.hbs
+├── annotated-viewer/        # HTML viewer generation
+│   ├── generator.ts
+│   └── templates/
+└── gist-uploader.ts         # GitHub Gist integration
+```
+
+## Contributing
+
+Issues and PRs welcome! https://github.com/varadhjain/claude-code-blog-generator/issues
 
 ## License
 
 MIT
+
+---
+
+**Built with ❤️ for teams documenting their Claude Code sessions**
+
+*Powered by gpt-5-nano for ultra-low-cost, high-quality session analysis*
