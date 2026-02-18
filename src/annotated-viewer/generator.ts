@@ -39,6 +39,9 @@ export interface GeneratorOptions {
   sessionTitle: string;
   messagesPerPage?: number;
   date?: string;
+  goal?: string;
+  outcome?: string;
+  model?: string;
 }
 
 // ============================================================================
@@ -129,6 +132,32 @@ function formatTimestamp(timestamp?: string): string {
     minute: '2-digit',
     hour12: true
   });
+}
+
+/**
+ * Convert raw model ID to human-readable name
+ * e.g. "claude-sonnet-4-5-20250929" → "Claude Sonnet 4.5"
+ */
+function formatModelName(raw: string): string {
+  // Strip trailing date suffix like -20250929
+  const withoutDate = raw.replace(/-\d{8}$/, '');
+  // Split on hyphens, then group consecutive numeric tokens with dots
+  const parts = withoutDate.split('-');
+  const result: string[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    if (/^\d+$/.test(parts[i])) {
+      const nums: string[] = [];
+      while (i < parts.length && /^\d+$/.test(parts[i])) {
+        nums.push(parts[i++]);
+      }
+      result.push(nums.join('.'));
+    } else {
+      const w = parts[i++];
+      result.push(w.charAt(0).toUpperCase() + w.slice(1));
+    }
+  }
+  return result.join(' ');
 }
 
 /**
@@ -310,7 +339,11 @@ async function generateSummaryPage(
     stats: generateStats(messages, annotations, durationMinutes),
     moments,
     phases: annotations.phases.phases.length > 0 ? annotations.phases.phases : null,
-    phaseNav: annotations.phases.phases.length > 0 ? generatePhaseNav(annotations.phases) : null
+    phaseNav: annotations.phases.phases.length > 0 ? generatePhaseNav(annotations.phases) : null,
+    goal: options.goal,
+    outcome: options.outcome,
+    model: options.model ? formatModelName(options.model) : undefined,
+    totalMessages: messages.length
   };
 
   return summaryTemplate(data);

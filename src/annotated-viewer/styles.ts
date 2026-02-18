@@ -14,7 +14,7 @@ export function getInlineStyles(): string {
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.6;
         color: #24292e;
         background: #ffffff;
@@ -26,7 +26,9 @@ export function getInlineStyles(): string {
       /* Header */
       .header {
         border-bottom: 2px solid #e1e4e8;
+        border-top: 3px solid #6366f1;
         padding-bottom: 1rem;
+        padding-top: 1.25rem;
         margin-bottom: 2rem;
       }
 
@@ -41,33 +43,90 @@ export function getInlineStyles(): string {
         font-size: 0.9rem;
       }
 
+      /* Hero card */
+      .hero-card {
+        background: linear-gradient(135deg, #f6f8ff 0%, #ffffff 100%);
+        border: 1px solid #d0d7de;
+        border-left: 4px solid #6366f1;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .hero-goal {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1f2328;
+        line-height: 1.5;
+        margin-bottom: 0.75rem;
+      }
+
+      .hero-outcome {
+        font-size: 0.9rem;
+        color: #586069;
+        line-height: 1.5;
+      }
+
+      .hero-outcome-label {
+        display: block;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #8c959f;
+        margin-bottom: 0.25rem;
+        font-weight: 600;
+      }
+
+      .model-badge {
+        display: inline-block;
+        margin-top: 0.75rem;
+        background: #eef0ff;
+        color: #4338ca;
+        border: 1px solid #c7d2fe;
+        border-radius: 999px;
+        padding: 0.2em 0.75em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+
       /* Stats Bar */
       .stats-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
-        padding: 1rem;
-        background: #f6f8fa;
-        border-radius: 6px;
+        gap: 0.75rem;
         margin-bottom: 2rem;
       }
 
       .stat {
         display: flex;
         flex-direction: column;
+        flex: 1;
+        min-width: 100px;
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
+        transition: box-shadow 0.15s ease;
+      }
+
+      .stat:hover {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
       }
 
       .stat-label {
-        font-size: 0.75rem;
-        color: #586069;
+        font-size: 0.7rem;
+        color: #8c959f;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
       }
 
       .stat-value {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #24292e;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1f2328;
       }
 
       /* Timeline (Summary View) */
@@ -83,23 +142,25 @@ export function getInlineStyles(): string {
       .moment {
         position: relative;
         padding-left: 2rem;
-        padding-bottom: 1.5rem;
+        padding-bottom: 2rem;
         border-left: 2px solid #e1e4e8;
       }
 
       .moment:last-child {
         border-left: 2px solid transparent;
+        padding-bottom: 0.5rem;
       }
 
       .moment::before {
         content: '';
         position: absolute;
-        left: -6px;
-        top: 0;
-        width: 10px;
-        height: 10px;
+        left: -7px;
+        top: 2px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
         border: 2px solid #fff;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
       }
 
       .moment.green::before {
@@ -115,21 +176,26 @@ export function getInlineStyles(): string {
       }
 
       .moment-time {
-        font-size: 0.75rem;
-        color: #586069;
+        font-size: 0.7rem;
+        color: #8c959f;
         display: block;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.3rem;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        font-weight: 600;
       }
 
       .moment-annotation {
         font-weight: 600;
         display: block;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.95rem;
+        color: #1f2328;
       }
 
       .moment-link {
-        font-size: 0.875rem;
-        color: #0969da;
+        font-size: 0.825rem;
+        color: #6366f1;
         text-decoration: none;
       }
 
@@ -145,19 +211,23 @@ export function getInlineStyles(): string {
       .phase-card {
         background: #f6f8fa;
         border: 1px solid #d0d7de;
+        border-left: 3px solid #6366f1;
         border-radius: 6px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        padding: 0.875rem 1.25rem;
+        margin-bottom: 0.75rem;
       }
 
       .phase-card h3 {
-        font-size: 1.125rem;
-        margin-bottom: 0.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.375rem;
+        color: #1f2328;
       }
 
       .phase-card p {
         color: #586069;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
       }
 
       /* Messages */
@@ -264,7 +334,8 @@ export function getInlineStyles(): string {
       code {
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
         font-size: 0.875em;
-        background: #f6f8fa;
+        background: #eef0f3;
+        color: #1f2328;
         padding: 0.2em 0.4em;
         border-radius: 3px;
       }

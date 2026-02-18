@@ -42,6 +42,7 @@ export interface SessionDigest {
     message_index: number;
     indicator: string;
   }>;
+  model?: string;
 }
 
 export function createSessionDigest(messages: any[]): SessionDigest {
@@ -99,6 +100,14 @@ export function createSessionDigest(messages: any[]): SessionDigest {
   if (timestamps.length > 1) {
     const duration = (Math.max(...timestamps) - Math.min(...timestamps)) / 1000 / 60;
     digest.session_stats.duration_estimate_minutes = Math.round(duration);
+  }
+
+  // Extract model from first assistant message that has one
+  for (const msg of messages) {
+    if (msg.type === 'assistant' && msg.message?.model) {
+      digest.model = msg.message.model;
+      break;
+    }
   }
 
   // Build tool summary

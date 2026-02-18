@@ -11,6 +11,7 @@ import * as path from 'path';
 import { analyzeSession } from '../user-annotations';
 import { generateAnnotatedHTML, type SessionMessage } from '../annotated-viewer/generator';
 import { generateBlogSummary } from '../blog-summary/generator';
+import { extractGoal, extractOutcome } from '../blog-summary/extractor';
 import { uploadHTMLToGist } from '../gist-uploader';
 import { OpenAIClient } from '../ai/client';
 import { runSetupWizard, quickSetupCheck } from './setup-wizard';
@@ -133,6 +134,9 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
     index
   }));
 
+  // Extract model from first assistant entry that carries one
+  const rawModel = entries.find(e => e.type === 'assistant' && e.message?.model)?.message?.model as string | undefined;
+
   console.log(`✅ Parsed ${messages.length} messages\n`);
 
   // Analyze
@@ -149,6 +153,10 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
   console.log(`   🔴 ${annotations.stats.redCount} pivots`);
   console.log(`   📋 ${annotations.phases.phases.length} phases detected\n`);
 
+  // Extract heuristic goal and outcome (no AI cost)
+  const goalResult = extractGoal(messages, annotations);
+  const outcomeResult = extractOutcome(messages, annotations);
+
   // Generate HTML viewer
   console.log('🎨 Generating annotated HTML viewer...');
   const htmlOutput = await generateAnnotatedHTML(
@@ -156,7 +164,10 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
     annotations,
     {
       sessionTitle: sessionTitle || 'Claude Code Session',
-      messagesPerPage: 50
+      messagesPerPage: 50,
+      goal: goalResult.text,
+      outcome: outcomeResult.text,
+      model: rawModel
     }
   );
 

@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{sessionTitle}} - Claude Code Session</title>
+  {{#if goal}}
+  <meta name="description" content="{{goal}}">
+  <meta property="og:title" content="{{sessionTitle}}">
+  <meta property="og:description" content="{{goal}}">
+  <meta property="og:type" content="article">
+  {{/if}}
   {{{styles}}}
 </head>
 <body>
@@ -12,9 +18,25 @@
     <p class="subtitle">
       Claude Code Session
       {{#if date}} · {{date}}{{/if}}
-      · Read in ~5 minutes
+      · {{totalMessages}} messages
     </p>
   </div>
+
+  {{! Hero card — session mission + outcome + model badge }}
+  {{#if goal}}
+  <div class="hero-card">
+    <div class="hero-goal">{{goal}}</div>
+    {{#if outcome}}
+    <div class="hero-outcome">
+      <span class="hero-outcome-label">What was accomplished</span>
+      {{outcome}}
+    </div>
+    {{/if}}
+    {{#if model}}
+    <div class="model-badge">{{model}}</div>
+    {{/if}}
+  </div>
+  {{/if}}
 
   {{! Stats }}
   {{{stats}}}
