@@ -67,7 +67,7 @@ export async function detectDecision(
     userPrompt,
     {
       temperature: 0.4,
-      maxTokens: 300,
+      maxTokens: 2500,
     }
   );
 

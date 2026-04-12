@@ -55,7 +55,7 @@ export async function summarizePhase(
     userPrompt,
     {
       temperature: 0.7,
-      maxTokens: 400,
+      maxTokens: 2500,
     }
   );
 

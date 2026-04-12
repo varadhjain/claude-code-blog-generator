@@ -85,7 +85,7 @@ export async function classifyPhase(
     userPrompt,
     {
       temperature: 0.3, // Lower temperature for consistent classification
-      maxTokens: 300,
+      maxTokens: 2500,
     }
   );
 

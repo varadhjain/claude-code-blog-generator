@@ -185,7 +185,7 @@ async function testAPIConnection(): Promise<{ ok: boolean; message: string }> {
       'test-connection',
       'You are a helpful assistant.',
       'Say "hello" in one word.',
-      { maxTokens: 10 }
+      { maxTokens: 500 }  // gpt-5-nano needs headroom for reasoning tokens
     );
 
     return {

@@ -252,7 +252,7 @@ export class OpenAIClient {
       responseFormat?: 'json_object' | 'text';
     } = {}
   ): Promise<T> {
-    const { maxTokens = 1000, responseFormat = 'json_object' } = options;
+    const { maxTokens = 2500, responseFormat = 'json_object' } = options;
 
     // For Anthropic, add JSON instruction to system prompt when JSON is requested
     const effectiveSystemPrompt =
