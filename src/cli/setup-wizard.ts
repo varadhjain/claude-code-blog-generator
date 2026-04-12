@@ -42,15 +42,20 @@ async function checkNodeVersion(): Promise<{ ok: boolean; message: string }> {
 }
 
 /**
- * Step 2: Check/Setup OpenAI API Key
+ * Step 2: Check/Setup API Key (Anthropic or OpenAI)
  */
-async function setupOpenAIKey(): Promise<{ ok: boolean; message: string }> {
-  console.log('\n📝 OpenAI API Key Setup\n');
+async function setupAPIKey(): Promise<{ ok: boolean; message: string }> {
+  console.log('\n📝 API Key Setup\n');
 
   // Check if already exists in environment
-  if (process.env.OPENAI_API_KEY) {
-    const masked = process.env.OPENAI_API_KEY.substring(0, 8) + '...' + process.env.OPENAI_API_KEY.slice(-4);
-    console.log(`Found existing key: ${masked}`);
+  const existingAnthropic = process.env.ANTHROPIC_API_KEY;
+  const existingOpenAI = process.env.OPENAI_API_KEY;
+
+  if (existingAnthropic || existingOpenAI) {
+    const key = existingAnthropic || existingOpenAI!;
+    const provider = existingAnthropic ? 'Anthropic' : 'OpenAI';
+    const masked = key.substring(0, 8) + '...' + key.slice(-4);
+    console.log(`Found existing ${provider} key: ${masked}`);
 
     const keepExisting = await confirm({
       message: 'Use this existing key?',
@@ -58,20 +63,43 @@ async function setupOpenAIKey(): Promise<{ ok: boolean; message: string }> {
     });
 
     if (keepExisting) {
-      return { ok: true, message: '✅ Using existing OpenAI API key' };
+      return { ok: true, message: `✅ Using existing ${provider} API key` };
     }
   }
 
-  // Guide user to get/set key
-  console.log('\n📋 You need an OpenAI API key to use this tool.\n');
-  console.log('Steps to get one:');
-  console.log('  1. Visit https://platform.openai.com/api-keys');
+  // Choose provider
+  const provider = await select({
+    message: 'Which AI provider do you want to use?',
+    choices: [
+      {
+        name: 'Anthropic (recommended for Claude Code users)',
+        value: 'anthropic',
+        description: 'Uses Claude Haiku 4.5 — fast and affordable'
+      },
+      {
+        name: 'OpenAI',
+        value: 'openai',
+        description: 'Uses gpt-5-nano — ultra-low cost'
+      }
+    ]
+  });
+
+  const isAnthropic = provider === 'anthropic';
+  const envVar = isAnthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+  const keyPrefix = isAnthropic ? 'sk-ant-' : 'sk-';
+  const keysUrl = isAnthropic
+    ? 'https://console.anthropic.com/settings/keys'
+    : 'https://platform.openai.com/api-keys';
+
+  console.log(`\n📋 You need an API key from ${isAnthropic ? 'Anthropic' : 'OpenAI'}.\n`);
+  console.log('Steps:');
+  console.log(`  1. Visit ${keysUrl}`);
   console.log('  2. Sign in or create an account');
-  console.log('  3. Click "Create new secret key"');
-  console.log('  4. Copy the key (starts with sk-proj-...)\n');
+  console.log('  3. Create a new API key');
+  console.log(`  4. Copy the key (starts with ${keyPrefix}...)\n`);
 
   const hasKey = await confirm({
-    message: 'Do you have an OpenAI API key?',
+    message: 'Do you have an API key?',
     default: false
   });
 
@@ -81,14 +109,9 @@ async function setupOpenAIKey(): Promise<{ ok: boolean; message: string }> {
   }
 
   const apiKey = await input({
-    message: 'Paste your OpenAI API key:',
+    message: `Paste your ${isAnthropic ? 'Anthropic' : 'OpenAI'} API key:`,
     validate: (value) => {
-      if (!value.startsWith('sk-')) {
-        return 'API key should start with "sk-"';
-      }
-      if (value.length < 20) {
-        return 'API key seems too short';
-      }
+      if (value.length < 20) return 'API key seems too short';
       return true;
     }
   });
@@ -98,7 +121,7 @@ async function setupOpenAIKey(): Promise<{ ok: boolean; message: string }> {
     message: 'Where should we save your API key?',
     choices: [
       {
-        name: '.env file (recommended - project-specific)',
+        name: '.env file (recommended)',
         value: 'env',
         description: 'Saves to .env in current directory'
       },
@@ -115,80 +138,59 @@ async function setupOpenAIKey(): Promise<{ ok: boolean; message: string }> {
       const envPath = path.join(process.cwd(), '.env');
       let envContent = '';
 
-      // Read existing .env if it exists
       try {
         envContent = await fs.readFile(envPath, 'utf-8');
       } catch (e) {
         // File doesn't exist, that's fine
       }
 
-      // Update or add OPENAI_API_KEY
-      if (envContent.includes('OPENAI_API_KEY=')) {
-        envContent = envContent.replace(/OPENAI_API_KEY=.*/, `OPENAI_API_KEY=${apiKey}`);
+      if (envContent.includes(`${envVar}=`)) {
+        envContent = envContent.replace(new RegExp(`${envVar}=.*`), `${envVar}=${apiKey}`);
       } else {
-        envContent += `\nOPENAI_API_KEY=${apiKey}\n`;
+        envContent += `\n${envVar}=${apiKey}\n`;
       }
 
       await fs.writeFile(envPath, envContent, 'utf-8');
+      process.env[envVar] = apiKey;
 
-      // Set in current process
-      process.env.OPENAI_API_KEY = apiKey;
-
-      return {
-        ok: true,
-        message: `✅ API key saved to .env file`
-      };
+      return { ok: true, message: `✅ ${isAnthropic ? 'Anthropic' : 'OpenAI'} API key saved to .env file` };
     } catch (error) {
-      return {
-        ok: false,
-        message: `❌ Failed to save .env file: ${(error as Error).message}`
-      };
+      return { ok: false, message: `❌ Failed to save .env file: ${(error as Error).message}` };
     }
   } else {
-    // Manual setup
-    console.log('\n📝 Add this to your shell configuration file:\n');
-    console.log('For bash (~/.bashrc or ~/.bash_profile):');
-    console.log(`  export OPENAI_API_KEY="${apiKey}"\n`);
-    console.log('For zsh (~/.zshrc):');
-    console.log(`  export OPENAI_API_KEY="${apiKey}"\n`);
-    console.log('Then run: source ~/.bashrc (or ~/.zshrc)\n');
+    console.log('\n📝 Add this to your shell config (~/.zshrc or ~/.bashrc):\n');
+    console.log(`  export ${envVar}="${apiKey}"\n`);
+    console.log('Then run: source ~/.zshrc\n');
 
-    // Set in current process for now
-    process.env.OPENAI_API_KEY = apiKey;
-
-    return {
-      ok: true,
-      message: '✅ API key ready (remember to add to shell config)'
-    };
+    process.env[envVar] = apiKey;
+    return { ok: true, message: '✅ API key ready (remember to add to shell config)' };
   }
 }
 
 /**
- * Step 3: Test OpenAI API Connection
+ * Step 3: Test API Connection
  */
-async function testOpenAIConnection(): Promise<{ ok: boolean; message: string }> {
-  console.log('\n🔌 Testing OpenAI API connection...\n');
+async function testAPIConnection(): Promise<{ ok: boolean; message: string }> {
+  console.log('\n🔌 Testing API connection...\n');
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
     return { ok: false, message: '❌ No API key found' };
   }
 
   try {
-    // Dynamic import to avoid loading OpenAI SDK if not needed
     const { OpenAIClient } = await import('../ai/client');
     const client = new OpenAIClient();
 
-    // Make a minimal test call
     await client.callText(
       'test-connection',
       'You are a helpful assistant.',
       'Say "hello" in one word.',
-      { temperature: 0, maxTokens: 10 }
+      { maxTokens: 10 }
     );
 
     return {
       ok: true,
-      message: '✅ OpenAI API connection successful'
+      message: `✅ ${client.getProvider() === 'anthropic' ? 'Anthropic' : 'OpenAI'} API connection successful (using ${client.getModel()})`
     };
   } catch (error) {
     const errMsg = (error as Error).message;
@@ -343,9 +345,9 @@ export async function runSetupWizard(): Promise<SetupResult> {
     return { success: false, errors, warnings };
   }
 
-  // Step 2: OpenAI API Key
-  console.log('2️⃣  Setting up OpenAI API key...');
-  const apiKeyResult = await setupOpenAIKey();
+  // Step 2: API Key (Anthropic or OpenAI)
+  console.log('2️⃣  Setting up API key...');
+  const apiKeyResult = await setupAPIKey();
   console.log(`   ${apiKeyResult.message}\n`);
   if (!apiKeyResult.ok) {
     errors.push(apiKeyResult.message);
@@ -354,7 +356,7 @@ export async function runSetupWizard(): Promise<SetupResult> {
   // Step 3: Test API Connection
   if (apiKeyResult.ok) {
     console.log('3️⃣  Testing API connection...');
-    const connectionTest = await testOpenAIConnection();
+    const connectionTest = await testAPIConnection();
     console.log(`   ${connectionTest.message}\n`);
     if (!connectionTest.ok) {
       errors.push(connectionTest.message);
@@ -413,8 +415,8 @@ export async function quickSetupCheck(): Promise<{ ready: boolean; issues: strin
   const issues: string[] = [];
 
   // Check API key
-  if (!process.env.OPENAI_API_KEY) {
-    issues.push('OPENAI_API_KEY not set (run: ccblog --setup)');
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+    issues.push('No API key set. Set ANTHROPIC_API_KEY or OPENAI_API_KEY (run: ccblog --setup)');
   }
 
   // Check Node version

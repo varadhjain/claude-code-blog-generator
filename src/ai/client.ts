@@ -1,11 +1,14 @@
 /**
- * OpenAI client wrapper with token tracking
+ * Multi-provider AI client with token tracking.
+ * Supports Anthropic (Claude) and OpenAI. Auto-detects available API key.
+ * Priority: ANTHROPIC_API_KEY > OPENAI_API_KEY
  */
 
-import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
+
+export type Provider = 'anthropic' | 'openai';
 
 export interface TokenUsage {
   promptTokens: number;
@@ -78,7 +81,6 @@ export class TokenTracker {
       );
     }
 
-    // Grand total
     const grandTotal = Object.values(stats).reduce(
       (acc: any, stat: any) => ({
         calls: acc.calls + stat.calls,
@@ -101,38 +103,145 @@ export class TokenTracker {
   }
 }
 
-export class OpenAIClient {
-  private client: OpenAI;
-  private tokenTracker: TokenTracker;
+// Provider configs
+const PROVIDERS = {
+  anthropic: {
+    model: 'claude-haiku-4-5-20251001',
+    inputCostPerToken: 0.80 / 1_000_000,  // $0.80/1M input
+    outputCostPerToken: 4.00 / 1_000_000,  // $4.00/1M output
+  },
+  openai: {
+    model: 'gpt-5-nano',
+    inputCostPerToken: 0.05 / 1_000_000,
+    outputCostPerToken: 0.40 / 1_000_000,
+  },
+} as const;
 
-  // gpt-5-nano pricing (August 2025)
-  // Input: $0.05 per 1M tokens
-  // Output: $0.40 per 1M tokens
-  private readonly INPUT_COST_PER_TOKEN = 0.05 / 1_000_000;
-  private readonly OUTPUT_COST_PER_TOKEN = 0.4 / 1_000_000;
+function detectProvider(): { provider: Provider; apiKey: string } {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  if (anthropicKey) return { provider: 'anthropic', apiKey: anthropicKey };
+  if (openaiKey) return { provider: 'openai', apiKey: openaiKey };
+
+  throw new Error(
+    'No API key found. Set one of:\n\n' +
+    '   ANTHROPIC_API_KEY=sk-ant-...   (recommended for Claude Code users)\n' +
+    '   OPENAI_API_KEY=sk-proj-...     (OpenAI)\n\n' +
+    '   Add to .env file or export as environment variable.\n' +
+    '   Get keys from:\n' +
+    '     Anthropic: https://console.anthropic.com/settings/keys\n' +
+    '     OpenAI:    https://platform.openai.com/api-keys'
+  );
+}
+
+/**
+ * Unified AI client. Auto-detects provider from available API keys.
+ * Supports both Anthropic (Claude) and OpenAI with identical interface.
+ */
+export class OpenAIClient {
+  private provider: Provider;
+  private apiKey: string;
+  private tokenTracker: TokenTracker;
+  private anthropicClient: any;
+  private openaiClient: any;
 
   constructor(tokenTracker?: TokenTracker) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        'OPENAI_API_KEY not found in environment variables.\n\n' +
-        '   Create a .env file in the project root:\n' +
-        '     OPENAI_API_KEY=sk-proj-...\n\n' +
-        '   Get your API key from: https://platform.openai.com/api-keys'
-      );
-    }
-
-    this.client = new OpenAI({ apiKey });
+    const detected = detectProvider();
+    this.provider = detected.provider;
+    this.apiKey = detected.apiKey;
     this.tokenTracker = tokenTracker || new TokenTracker();
+  }
+
+  getProvider(): Provider {
+    return this.provider;
+  }
+
+  getModel(): string {
+    return PROVIDERS[this.provider].model;
   }
 
   getTokenTracker(): TokenTracker {
     return this.tokenTracker;
   }
 
-  /**
-   * Call gpt-5-nano with structured JSON response
-   */
+  private async getAnthropicClient() {
+    if (!this.anthropicClient) {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk');
+      this.anthropicClient = new Anthropic({ apiKey: this.apiKey });
+    }
+    return this.anthropicClient;
+  }
+
+  private async getOpenAIClient() {
+    if (!this.openaiClient) {
+      const { default: OpenAI } = await import('openai');
+      this.openaiClient = new OpenAI({ apiKey: this.apiKey });
+    }
+    return this.openaiClient;
+  }
+
+  private trackUsage(promptType: string, inputTokens: number, outputTokens: number): void {
+    const config = PROVIDERS[this.provider];
+    const usage: TokenUsage = {
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      cost: inputTokens * config.inputCostPerToken + outputTokens * config.outputCostPerToken,
+    };
+    this.tokenTracker.track(promptType, usage);
+  }
+
+  private async callAnthropic(
+    systemPrompt: string,
+    userPrompt: string,
+    maxTokens: number
+  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+    const client = await this.getAnthropicClient();
+    const response = await client.messages.create({
+      model: PROVIDERS.anthropic.model,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const content = response.content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
+      .join('');
+
+    return {
+      content,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    };
+  }
+
+  private async callOpenAI(
+    systemPrompt: string,
+    userPrompt: string,
+    maxTokens: number,
+    responseFormat?: 'json_object' | 'text'
+  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+    const client = await this.getOpenAIClient();
+    const response = await client.chat.completions.create({
+      model: PROVIDERS.openai.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_completion_tokens: maxTokens,
+      response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    return {
+      content,
+      inputTokens: response.usage?.prompt_tokens || 0,
+      outputTokens: response.usage?.completion_tokens || 0,
+    };
+  }
+
   async callStructured<T = any>(
     promptType: string,
     systemPrompt: string,
@@ -143,91 +252,69 @@ export class OpenAIClient {
       responseFormat?: 'json_object' | 'text';
     } = {}
   ): Promise<T> {
-    const {
-      maxTokens = 1000,
-      responseFormat = 'json_object',
-    } = options;
+    const { maxTokens = 1000, responseFormat = 'json_object' } = options;
+
+    // For Anthropic, add JSON instruction to system prompt when JSON is requested
+    const effectiveSystemPrompt =
+      this.provider === 'anthropic' && responseFormat === 'json_object'
+        ? systemPrompt + '\n\nIMPORTANT: Respond with valid JSON only. No other text.'
+        : systemPrompt;
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-5-nano',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        // gpt-5-nano only supports temperature=1 (default), so we omit it
-        max_completion_tokens: maxTokens, // gpt-5-nano uses max_completion_tokens
-        response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
-      });
+      let result: { content: string; inputTokens: number; outputTokens: number };
 
-      const usage = response.usage;
-      if (usage) {
-        const tokenUsage: TokenUsage = {
-          promptTokens: usage.prompt_tokens,
-          completionTokens: usage.completion_tokens,
-          totalTokens: usage.total_tokens,
-          cost:
-            usage.prompt_tokens * this.INPUT_COST_PER_TOKEN +
-            usage.completion_tokens * this.OUTPUT_COST_PER_TOKEN,
-        };
-        this.tokenTracker.track(promptType, tokenUsage);
+      if (this.provider === 'anthropic') {
+        result = await this.callAnthropic(effectiveSystemPrompt, userPrompt, maxTokens);
+      } else {
+        result = await this.callOpenAI(effectiveSystemPrompt, userPrompt, maxTokens, responseFormat);
       }
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error('No content in response from OpenAI API');
+      this.trackUsage(promptType, result.inputTokens, result.outputTokens);
+
+      if (!result.content) {
+        throw new Error(`No content in response from ${this.provider} API`);
       }
 
       if (responseFormat === 'json_object') {
+        // Extract JSON from response (handles markdown code blocks)
+        let jsonStr = result.content.trim();
+        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) jsonStr = jsonMatch[1].trim();
+
         try {
-          return JSON.parse(content) as T;
+          return JSON.parse(jsonStr) as T;
         } catch (parseError) {
-          throw new Error(`Failed to parse JSON response: ${content.substring(0, 200)}...`);
+          throw new Error(`Failed to parse JSON response: ${jsonStr.substring(0, 200)}...`);
         }
       }
 
-      return content as T;
+      return result.content as T;
     } catch (error: any) {
-      // Enhance error messages for common issues
-      if (error.code === 'insufficient_quota') {
+      if (error.code === 'insufficient_quota' || error.status === 429) {
         throw new Error(
-          'OpenAI API quota exceeded.\n\n' +
-          '   Your OpenAI account has run out of credits.\n' +
-          '   Add credits at: https://platform.openai.com/account/billing'
+          `${this.provider} API quota exceeded.\n\n` +
+          '   Add credits to your account.'
         );
       }
 
       if (error.code === 'invalid_api_key' || error.status === 401) {
         throw new Error(
-          'Invalid OpenAI API key.\n\n' +
-          '   Check your .env file and verify the API key is correct.\n' +
-          '   Get a new key at: https://platform.openai.com/api-keys'
-        );
-      }
-
-      if (error.code === 'model_not_found') {
-        throw new Error(
-          'Model gpt-5-nano not found.\n\n' +
-          '   This model might not be available yet or your account may not have access.\n' +
-          '   Check OpenAI model availability at: https://platform.openai.com/docs/models'
+          `Invalid ${this.provider} API key.\n\n` +
+          '   Check your .env file and verify the API key is correct.'
         );
       }
 
       if (error.message?.includes('ENOTFOUND') || error.message?.includes('ECONNREFUSED')) {
         throw new Error(
-          'Cannot connect to OpenAI API.\n\n' +
+          `Cannot connect to ${this.provider} API.\n\n` +
           '   Check your internet connection and try again.'
         );
       }
 
-      // Re-throw with original message if no specific handler
       throw error;
     }
   }
 
-  /**
-   * Call gpt-5-nano with text response
-   */
   async callText(
     promptType: string,
     systemPrompt: string,

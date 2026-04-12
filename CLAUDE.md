@@ -7,12 +7,12 @@
 
 ## AI Model Policy
 
-**CRITICAL**: This project uses **gpt-5-nano ONLY** for all AI operations.
+This project supports **two providers** — auto-detected from available API keys:
 
-- ✅ **USE**: `gpt-5-nano` (OpenAI model, released August 2025)
-- ❌ **DO NOT USE**: Any other models (GPT-4, GPT-4o, gpt-4o-mini, Claude, etc.)
+- ✅ **Anthropic**: `claude-haiku-4-5-20251001` ($0.80/$4.00 per 1M tokens) — recommended for Claude Code users
+- ✅ **OpenAI**: `gpt-5-nano` ($0.05/$0.40 per 1M tokens) — ultra-low cost
+- **Priority**: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY`
 
-**Pricing**: $0.05/1M input tokens, $0.40/1M output tokens
 **Target cost**: < $0.01 per session analysis
 
 ## Project Goal

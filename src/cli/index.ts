@@ -14,6 +14,7 @@ import { generateBlogSummary } from '../blog-summary/generator';
 import { extractGoal, extractOutcome } from '../blog-summary/extractor';
 import { uploadHTMLToGist } from '../gist-uploader';
 import { OpenAIClient } from '../ai/client';
+import { redactFiles } from '../redactor';
 import { runSetupWizard, quickSetupCheck } from './setup-wizard';
 
 // ============================================================================
@@ -113,11 +114,20 @@ function formatSessionChoice(session: ClaudeSession): string {
 // ANALYSIS WORKFLOW
 // ============================================================================
 
-async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<void> {
-  console.log('\n🚀 Starting analysis...\n');
+interface AnalysisOptions {
+  sessionTitle?: string;
+  auto?: boolean;
+  redact?: boolean;
+  quiet?: boolean;
+}
+
+async function runAnalysis(sessionPath: string, options: AnalysisOptions = {}): Promise<void> {
+  const { sessionTitle, auto, redact, quiet } = options;
+  const log = quiet ? (..._args: any[]) => {} : console.log;
+  log('\n🚀 Starting analysis...\n');
 
   // Parse JSONL
-  console.log('📖 Parsing session file...');
+  log('📖 Parsing session file...');
   const lines = (await fs.readFile(sessionPath, 'utf-8')).trim().split('\n');
   const entries = lines.map((line, idx) => {
     try {
@@ -137,28 +147,28 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
   // Extract model from first assistant entry that carries one
   const rawModel = entries.find(e => e.type === 'assistant' && e.message?.model)?.message?.model as string | undefined;
 
-  console.log(`✅ Parsed ${messages.length} messages\n`);
+  log(`✅ Parsed ${messages.length} messages\n`);
 
   // Analyze
-  console.log('🤖 Analyzing session with AI...');
+  log('🤖 Analyzing session with AI...');
   const client = new OpenAIClient();
   const annotations = await analyzeSession(client, {
     sessionPath,
     contextWindow: 3
   });
 
-  console.log(`✅ Analysis complete!`);
-  console.log(`   🟢 ${annotations.stats.greenCount} new tasks`);
-  console.log(`   🟡 ${annotations.stats.yellowCount} clarifications`);
-  console.log(`   🔴 ${annotations.stats.redCount} pivots`);
-  console.log(`   📋 ${annotations.phases.phases.length} phases detected\n`);
+  log(`✅ Analysis complete!`);
+  log(`   🟢 ${annotations.stats.greenCount} new tasks`);
+  log(`   🟡 ${annotations.stats.yellowCount} clarifications`);
+  log(`   🔴 ${annotations.stats.redCount} pivots`);
+  log(`   📋 ${annotations.phases.phases.length} phases detected\n`);
 
   // Extract heuristic goal and outcome (no AI cost)
   const goalResult = extractGoal(messages, annotations);
   const outcomeResult = extractOutcome(messages, annotations);
 
   // Generate HTML viewer
-  console.log('🎨 Generating annotated HTML viewer...');
+  log('🎨 Generating annotated HTML viewer...');
   const htmlOutput = await generateAnnotatedHTML(
     messages,
     annotations,
@@ -171,10 +181,10 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
     }
   );
 
-  console.log(`✅ HTML generated (${htmlOutput.pages.length} pages)\n`);
+  log(`✅ HTML generated (${htmlOutput.pages.length} pages)\n`);
 
   // Generate blog summary
-  console.log('📝 Generating blog summary...');
+  log('📝 Generating blog summary...');
   const blogSummary = await generateBlogSummary(
     messages,
     annotations,
@@ -187,26 +197,64 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
     }
   );
 
-  console.log(`✅ Blog summary generated!\n`);
+  log(`✅ Blog summary generated!\n`);
 
-  // Upload to Gist
+  // Build file map
+  let fileMap = new Map<string, string>();
+  fileMap.set('index.html', htmlOutput.summary);
+  for (const page of htmlOutput.pages) {
+    fileMap.set(page.filename, page.content);
+  }
+  fileMap.set('SUMMARY.md', blogSummary.markdown);
+  fileMap.set('summary.html', blogSummary.html);
+
+  // PII redaction
+  if (redact) {
+    log('🔒 Running PII redaction...');
+    const redactionResult = redactFiles(fileMap);
+    fileMap = redactionResult.files;
+    log(`   ${redactionResult.summary}\n`);
+  }
+
+  // Auto mode: save to ~/.ccblog/drafts/ and exit
+  if (auto) {
+    const draftsDir = path.join(process.env.HOME!, '.ccblog', 'drafts');
+    await fs.mkdir(draftsDir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const draftDir = path.join(draftsDir, timestamp);
+    await fs.mkdir(draftDir, { recursive: true });
+
+    for (const [filename, content] of fileMap) {
+      await fs.writeFile(path.join(draftDir, filename), content);
+    }
+    if (!quiet) console.log(`✅ Draft saved to ${draftDir}`);
+    return;
+  }
+
+  // Interactive: ask where to save
   const shouldUpload = await confirm({
     message: 'Upload to GitHub Gist?',
     default: true
   });
 
   if (shouldUpload) {
-    console.log('☁️  Uploading to GitHub Gist...');
-    const files = [
-      { filename: 'index.html', content: htmlOutput.summary },
-      ...htmlOutput.pages.map(page => ({
-        filename: page.filename,
-        content: page.content
-      })),
-      { filename: 'SUMMARY.md', content: blogSummary.markdown },
-      { filename: 'summary.html', content: blogSummary.html }
-    ];
+    // Auto-redact when publishing (if not already done)
+    if (!redact) {
+      const redactionResult = redactFiles(fileMap);
+      if (redactionResult.totalRedactions > 0) {
+        log(`⚠️  ${redactionResult.summary}`);
+        const proceed = await confirm({
+          message: 'Sensitive content detected. Redact before uploading?',
+          default: true
+        });
+        if (proceed) {
+          fileMap = redactionResult.files;
+        }
+      }
+    }
 
+    log('☁️  Uploading to GitHub Gist...');
+    const files = Array.from(fileMap.entries()).map(([filename, content]) => ({ filename, content }));
     const result = await uploadHTMLToGist(files, sessionTitle || 'claude-code-session');
 
     console.log(`\n✅ Success!`);
@@ -222,12 +270,9 @@ async function runAnalysis(sessionPath: string, sessionTitle?: string): Promise<
     const outputDir = path.join(process.cwd(), 'output');
     await fs.mkdir(outputDir, { recursive: true });
 
-    await fs.writeFile(path.join(outputDir, 'index.html'), htmlOutput.summary);
-    for (const page of htmlOutput.pages) {
-      await fs.writeFile(path.join(outputDir, page.filename), page.content);
+    for (const [filename, content] of fileMap) {
+      await fs.writeFile(path.join(outputDir, filename), content);
     }
-    await fs.writeFile(path.join(outputDir, 'SUMMARY.md'), blogSummary.markdown);
-    await fs.writeFile(path.join(outputDir, 'summary.html'), blogSummary.html);
 
     console.log(`\n✅ Saved to ${outputDir}/\n`);
   }
@@ -252,16 +297,47 @@ async function main() {
 
   // Check for --help flag
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Claude Code Blog Generator - Transform Claude sessions into blog posts\n');
+    console.log('Claude Code Blog Generator - Turn sessions into publishable developer content\n');
     console.log('Usage:');
-    console.log('  ccblog           Start interactive session picker');
-    console.log('  ccblog --setup   Run setup wizard');
-    console.log('  ccblog --help    Show this help\n');
-    console.log('Quick setup:');
-    console.log('  1. Install: npm install -g claude-code-blog-generator');
-    console.log('  2. Setup: ccblog --setup');
-    console.log('  3. Run: ccblog\n');
+    console.log('  ccblog              Start interactive session picker');
+    console.log('  ccblog --auto       Auto-analyze latest session (for hooks, saves to ~/.ccblog/drafts/)');
+    console.log('  ccblog --redact     Enable PII redaction (API keys, emails, paths)');
+    console.log('  ccblog --quiet      Suppress output (combine with --auto for hooks)');
+    console.log('  ccblog --setup      Run setup wizard');
+    console.log('  ccblog --help       Show this help\n');
+    console.log('Hook setup (auto-generate after every session):');
+    console.log('  Add to ~/.claude/settings.json:');
+    console.log('  { "hooks": { "PostSessionStop": [{ "command": "ccblog --auto --quiet --redact" }] } }\n');
     console.log('Documentation: https://github.com/varadhjain/claude-code-blog-generator\n');
+    return;
+  }
+
+  const autoMode = args.includes('--auto');
+  const redactMode = args.includes('--redact');
+  const quietMode = args.includes('--quiet');
+
+  // Auto mode: analyze most recent session, save draft, exit
+  if (autoMode) {
+    const { ready } = await quickSetupCheck();
+    if (!ready) {
+      if (!quietMode) console.error('❌ Setup incomplete. Run: ccblog --setup');
+      process.exit(1);
+    }
+
+    const sessions = await discoverSessions();
+    if (sessions.length === 0) {
+      if (!quietMode) console.error('❌ No sessions found');
+      process.exit(1);
+    }
+
+    // Pick most recent session
+    const latest = sessions[0];
+    await runAnalysis(latest.path, {
+      sessionTitle: `Session ${new Date().toISOString().substring(0, 10)}`,
+      auto: true,
+      redact: redactMode,
+      quiet: quietMode
+    });
     return;
   }
 
@@ -353,7 +429,7 @@ async function main() {
   });
 
   // Run analysis
-  await runAnalysis(finalPath, sessionTitle);
+  await runAnalysis(finalPath, { sessionTitle, redact: redactMode });
 }
 
 // Run CLI
