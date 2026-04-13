@@ -15,6 +15,7 @@ import { extractGoal, extractOutcome } from '../blog-summary/extractor';
 import { uploadHTMLToGist } from '../gist-uploader';
 import { OpenAIClient } from '../ai/client';
 import { redactFiles } from '../redactor';
+import { extractFromSession } from '../extractor';
 import { runSetupWizard, quickSetupCheck } from './setup-wizard';
 
 // ============================================================================
@@ -295,20 +296,58 @@ async function main() {
     return;
   }
 
+  // Check for 'serve' subcommand — start MCP server
+  if (args[0] === 'serve') {
+    const { startServer } = await import('../mcp-server');
+    await startServer();
+    return;
+  }
+
+  // Check for 'extract' subcommand
+  if (args[0] === 'extract') {
+    const sessionPath = args[1];
+    if (!sessionPath) {
+      // No path given — extract from most recent session
+      const sessions = await discoverSessions();
+      if (sessions.length === 0) {
+        console.error('❌ No sessions found. Provide a path: ccblog extract <session.jsonl>');
+        process.exit(1);
+      }
+      const result = await extractFromSession(sessions[0].path, {
+        redact: args.includes('--redact'),
+        quiet: args.includes('--quiet'),
+      });
+      console.log(`\n📚 ${result.learnings.length} learnings extracted from ${result.episodesFound} episodes`);
+      return;
+    }
+    const result = await extractFromSession(sessionPath, {
+      redact: args.includes('--redact'),
+      quiet: args.includes('--quiet'),
+    });
+    console.log(`\n📚 ${result.learnings.length} learnings extracted from ${result.episodesFound} episodes`);
+    return;
+  }
+
   // Check for --help flag
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Claude Code Blog Generator - Turn sessions into publishable developer content\n');
-    console.log('Usage:');
-    console.log('  ccblog              Start interactive session picker');
-    console.log('  ccblog --auto       Auto-analyze latest session (for hooks, saves to ~/.ccblog/drafts/)');
-    console.log('  ccblog --redact     Enable PII redaction (API keys, emails, paths)');
-    console.log('  ccblog --quiet      Suppress output (combine with --auto for hooks)');
-    console.log('  ccblog --setup      Run setup wizard');
-    console.log('  ccblog --help       Show this help\n');
-    console.log('Hook setup (auto-generate after every session):');
-    console.log('  Add to ~/.claude/settings.json:');
+    console.log('ccblog — Turn Claude Code sessions into content + agent learnings\n');
+    console.log('Commands:');
+    console.log('  ccblog              Interactive session → blog post');
+    console.log('  ccblog extract      Extract learnings from latest session (or: ccblog extract <path>)');
+    console.log('  ccblog serve        Start MCP server (exposes learnings to other agents)\n');
+    console.log('Flags:');
+    console.log('  --auto              Auto-analyze latest session + extract learnings');
+    console.log('  --redact            PII redaction (API keys, emails, paths)');
+    console.log('  --quiet             Suppress output (for hooks)');
+    console.log('  --setup             Run setup wizard');
+    console.log('  --help              Show this help\n');
+    console.log('Agent hook (auto-capture after every session):');
+    console.log('  ~/.claude/settings.json:');
     console.log('  { "hooks": { "PostSessionStop": [{ "command": "ccblog --auto --quiet --redact" }] } }\n');
-    console.log('Documentation: https://github.com/varadhjain/claude-code-blog-generator\n');
+    console.log('MCP setup (let agents query past learnings):');
+    console.log('  ~/.claude/settings.json:');
+    console.log('  { "mcpServers": { "ccblog": { "command": "ccblog", "args": ["serve"] } } }\n');
+    console.log('https://github.com/varadhjain/claude-code-blog-generator\n');
     return;
   }
 
@@ -338,6 +377,10 @@ async function main() {
       redact: redactMode,
       quiet: quietMode
     });
+
+    // Also extract learnings
+    if (!quietMode) console.log('\n🧠 Extracting learnings...');
+    await extractFromSession(latest.path, { redact: redactMode, quiet: quietMode });
     return;
   }
 
