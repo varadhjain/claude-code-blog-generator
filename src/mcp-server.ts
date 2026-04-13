@@ -12,6 +12,9 @@
  *   { "mcpServers": { "ccblog": { "command": "ccblog", "args": ["serve"] } } }
  */
 
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { loadLearnings, updateLearning, type Learning } from './extractor';
 
 // In-memory cache to avoid re-reading all files on every request
@@ -31,11 +34,7 @@ function invalidateCache() {
   learningsCache = null;
 }
 
-// We need dynamic import for ESM-only MCP SDK in our CommonJS project
 async function startServer() {
-  const { Server } = await import('@modelcontextprotocol/sdk/server/index.js' as any);
-  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js' as any);
-
   const server = new Server(
     { name: 'ccblog', version: '1.0.0' },
     {
@@ -47,18 +46,18 @@ async function startServer() {
   );
 
   // List available tools
-  server.setRequestHandler('tools/list' as any, async () => ({
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       {
         name: 'search_learnings',
         description: 'Search past session learnings by problem description, error message, or topic. Returns matching solutions, pitfalls, and patterns from previous Claude Code sessions.',
         inputSchema: {
-          type: 'object',
+          type: 'object' as const,
           properties: {
-            query: { type: 'string', description: 'Search query — error message, problem description, or topic' },
-            tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags (e.g., ["typescript", "openai"])' },
-            language: { type: 'string', description: 'Filter by programming language' },
-            limit: { type: 'number', description: 'Max results (default 5)' },
+            query: { type: 'string' as const, description: 'Search query — error message, problem description, or topic' },
+            tags: { type: 'array' as const, items: { type: 'string' as const }, description: 'Filter by tags (e.g., ["typescript", "openai"])' },
+            language: { type: 'string' as const, description: 'Filter by programming language' },
+            limit: { type: 'number' as const, description: 'Max results (default 5)' },
           },
           required: ['query'],
         },
@@ -67,9 +66,9 @@ async function startServer() {
         name: 'get_learning',
         description: 'Get the full details of a specific learning by ID.',
         inputSchema: {
-          type: 'object',
+          type: 'object' as const,
           properties: {
-            id: { type: 'string', description: 'Learning ID' },
+            id: { type: 'string' as const, description: 'Learning ID' },
           },
           required: ['id'],
         },
@@ -78,9 +77,9 @@ async function startServer() {
         name: 'list_recent',
         description: 'List the most recent learnings extracted from sessions.',
         inputSchema: {
-          type: 'object',
+          type: 'object' as const,
           properties: {
-            limit: { type: 'number', description: 'Number of learnings to return (default 10)' },
+            limit: { type: 'number' as const, description: 'Number of learnings to return (default 10)' },
           },
         },
       },
@@ -88,10 +87,10 @@ async function startServer() {
         name: 'submit_feedback',
         description: 'Report whether a learning was useful. Improves future search ranking.',
         inputSchema: {
-          type: 'object',
+          type: 'object' as const,
           properties: {
-            id: { type: 'string', description: 'Learning ID' },
-            useful: { type: 'boolean', description: 'Was this learning helpful?' },
+            id: { type: 'string' as const, description: 'Learning ID' },
+            useful: { type: 'boolean' as const, description: 'Was this learning helpful?' },
           },
           required: ['id', 'useful'],
         },
@@ -100,16 +99,17 @@ async function startServer() {
   }));
 
   // Handle tool calls
-  server.setRequestHandler('tools/call' as any, async (request: any) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    const toolArgs = (args || {}) as Record<string, any>;
 
     switch (name) {
       case 'search_learnings': {
         const learnings = await getCachedLearnings();
-        const query = (args.query || '').toLowerCase();
-        const tagFilter = args.tags as string[] | undefined;
-        const langFilter = args.language as string | undefined;
-        const limit = args.limit || 5;
+        const query = (toolArgs.query || '').toLowerCase();
+        const tagFilter = toolArgs.tags as string[] | undefined;
+        const langFilter = toolArgs.language as string | undefined;
+        const limit = toolArgs.limit || 5;
 
         const scored = learnings.map(l => {
           let score = 0;
@@ -135,18 +135,19 @@ async function startServer() {
             score += 1;
           }
 
-          // Importance weighting
-          score *= l.importance;
-
-          // Recency boost (learnings from last 7 days get +1)
+          // Recency boost BEFORE importance multiplier
           const ageMs = Date.now() - new Date(l.created_at).getTime();
           if (ageMs < 7 * 86400 * 1000) score += 1;
+
+          // Importance weighting (applied last, scales everything uniformly)
+          score *= l.importance;
 
           return { learning: l, score };
         });
 
+        // Require at least some keyword/tag signal (not just recency)
         const results = scored
-          .filter(s => s.score > 0)
+          .filter(s => s.score > s.learning.importance) // recency alone (1 * importance) isn't enough
           .sort((a, b) => b.score - a.score)
           .slice(0, limit)
           .map(s => formatLearning(s.learning, s.score));
@@ -163,16 +164,17 @@ async function startServer() {
 
       case 'get_learning': {
         const learnings = await getCachedLearnings();
-        const learning = learnings.find(l => l.id === args.id);
+        const learning = learnings.find(l => l.id === toolArgs.id);
 
         if (!learning) {
-          return { content: [{ type: 'text', text: `Learning ${args.id} not found.` }] };
+          return { content: [{ type: 'text', text: `Learning ${toolArgs.id} not found.` }] };
         }
 
         // Track retrieval
-        await updateLearning(args.id, {
+        await updateLearning(toolArgs.id, {
           times_retrieved: learning.times_retrieved + 1,
         });
+        invalidateCache();
 
         return {
           content: [{ type: 'text', text: JSON.stringify(learning, null, 2) }],
@@ -181,7 +183,7 @@ async function startServer() {
 
       case 'list_recent': {
         const learnings = await getCachedLearnings();
-        const limit = args.limit || 10;
+        const limit = toolArgs.limit || 10;
         const recent = learnings.slice(0, limit);
 
         const summaries = recent.map(l =>
@@ -200,23 +202,24 @@ async function startServer() {
 
       case 'submit_feedback': {
         const learnings = await getCachedLearnings();
-        const learning = learnings.find(l => l.id === args.id);
+        const learning = learnings.find(l => l.id === toolArgs.id);
 
         if (!learning) {
-          return { content: [{ type: 'text', text: `Learning ${args.id} not found.` }] };
+          return { content: [{ type: 'text', text: `Learning ${toolArgs.id} not found.` }] };
         }
 
-        const importanceDelta = args.useful ? 0.1 : -0.1;
-        await updateLearning(args.id, {
-          importance: Math.max(0.3, learning.importance + importanceDelta),  // floor at 0.3, not 0.1
-          times_useful: learning.times_useful + (args.useful ? 1 : 0),
+        const importanceDelta = toolArgs.useful ? 0.1 : -0.1;
+        const newImportance = Math.max(0.3, learning.importance + importanceDelta);
+        await updateLearning(toolArgs.id, {
+          importance: newImportance,
+          times_useful: learning.times_useful + (toolArgs.useful ? 1 : 0),
         });
         invalidateCache();
 
         return {
           content: [{
             type: 'text',
-            text: `Feedback recorded. Importance: ${learning.importance.toFixed(1)} → ${Math.max(0.3, learning.importance + importanceDelta).toFixed(1)}`,
+            text: `Feedback recorded. Importance: ${learning.importance.toFixed(1)} → ${newImportance.toFixed(1)}`,
           }],
         };
       }
