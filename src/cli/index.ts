@@ -296,16 +296,21 @@ async function main() {
     return;
   }
 
+  // Separate flags from positional args
+  const flags = args.filter(a => a.startsWith('--') || a.startsWith('-'));
+  const positional = args.filter(a => !a.startsWith('--') && !a.startsWith('-'));
+  const subcommand = positional[0]; // 'extract', 'serve', or undefined
+
   // Check for 'serve' subcommand — start MCP server
-  if (args[0] === 'serve') {
+  if (subcommand === 'serve') {
     const { startServer } = await import('../mcp-server');
     await startServer();
     return;
   }
 
   // Check for 'extract' subcommand
-  if (args[0] === 'extract') {
-    const sessionPath = args[1];
+  if (subcommand === 'extract') {
+    const sessionPath = positional[1]; // file path, if provided
     if (!sessionPath) {
       // No path given — extract from most recent session
       const sessions = await discoverSessions();
@@ -314,15 +319,15 @@ async function main() {
         process.exit(1);
       }
       const result = await extractFromSession(sessions[0].path, {
-        redact: args.includes('--redact'),
-        quiet: args.includes('--quiet'),
+        redact: flags.includes('--redact'),
+        quiet: flags.includes('--quiet'),
       });
       console.log(`\n📚 ${result.learnings.length} learnings extracted from ${result.episodesFound} episodes`);
       return;
     }
     const result = await extractFromSession(sessionPath, {
-      redact: args.includes('--redact'),
-      quiet: args.includes('--quiet'),
+      redact: flags.includes('--redact'),
+      quiet: flags.includes('--quiet'),
     });
     console.log(`\n📚 ${result.learnings.length} learnings extracted from ${result.episodesFound} episodes`);
     return;
@@ -356,7 +361,9 @@ async function main() {
   const quietMode = args.includes('--quiet');
 
   // Auto mode: analyze most recent session, save draft, exit
+  // Redaction is ON by default in auto mode (security: hook runs unattended)
   if (autoMode) {
+    const autoRedact = redactMode || true; // always redact in auto mode
     const { ready } = await quickSetupCheck();
     if (!ready) {
       if (!quietMode) console.error('❌ Setup incomplete. Run: ccblog --setup');
@@ -374,13 +381,17 @@ async function main() {
     await runAnalysis(latest.path, {
       sessionTitle: `Session ${new Date().toISOString().substring(0, 10)}`,
       auto: true,
-      redact: redactMode,
+      redact: autoRedact,
       quiet: quietMode
     });
 
-    // Also extract learnings
-    if (!quietMode) console.log('\n🧠 Extracting learnings...');
-    await extractFromSession(latest.path, { redact: redactMode, quiet: quietMode });
+    // Also extract learnings (don't let extraction failure crash the whole run)
+    try {
+      if (!quietMode) console.log('\n🧠 Extracting learnings...');
+      await extractFromSession(latest.path, { redact: autoRedact, quiet: quietMode });
+    } catch (err) {
+      if (!quietMode) console.error('⚠️  Learning extraction failed (draft was saved):', (err as Error).message);
+    }
     return;
   }
 

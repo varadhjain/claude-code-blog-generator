@@ -14,6 +14,23 @@
 
 import { loadLearnings, updateLearning, type Learning } from './extractor';
 
+// In-memory cache to avoid re-reading all files on every request
+let learningsCache: Learning[] | null = null;
+let cacheLoadedAt = 0;
+const CACHE_TTL_MS = 60_000; // refresh every 60s
+
+async function getCachedLearnings(): Promise<Learning[]> {
+  if (!learningsCache || Date.now() - cacheLoadedAt > CACHE_TTL_MS) {
+    learningsCache = await loadLearnings();
+    cacheLoadedAt = Date.now();
+  }
+  return learningsCache;
+}
+
+function invalidateCache() {
+  learningsCache = null;
+}
+
 // We need dynamic import for ESM-only MCP SDK in our CommonJS project
 async function startServer() {
   const { Server } = await import('@modelcontextprotocol/sdk/server/index.js' as any);
@@ -88,7 +105,7 @@ async function startServer() {
 
     switch (name) {
       case 'search_learnings': {
-        const learnings = await loadLearnings();
+        const learnings = await getCachedLearnings();
         const query = (args.query || '').toLowerCase();
         const tagFilter = args.tags as string[] | undefined;
         const langFilter = args.language as string | undefined;
@@ -145,7 +162,7 @@ async function startServer() {
       }
 
       case 'get_learning': {
-        const learnings = await loadLearnings();
+        const learnings = await getCachedLearnings();
         const learning = learnings.find(l => l.id === args.id);
 
         if (!learning) {
@@ -163,7 +180,7 @@ async function startServer() {
       }
 
       case 'list_recent': {
-        const learnings = await loadLearnings();
+        const learnings = await getCachedLearnings();
         const limit = args.limit || 10;
         const recent = learnings.slice(0, limit);
 
@@ -182,7 +199,7 @@ async function startServer() {
       }
 
       case 'submit_feedback': {
-        const learnings = await loadLearnings();
+        const learnings = await getCachedLearnings();
         const learning = learnings.find(l => l.id === args.id);
 
         if (!learning) {
@@ -191,14 +208,15 @@ async function startServer() {
 
         const importanceDelta = args.useful ? 0.1 : -0.1;
         await updateLearning(args.id, {
-          importance: Math.max(0.1, learning.importance + importanceDelta),
+          importance: Math.max(0.3, learning.importance + importanceDelta),  // floor at 0.3, not 0.1
           times_useful: learning.times_useful + (args.useful ? 1 : 0),
         });
+        invalidateCache();
 
         return {
           content: [{
             type: 'text',
-            text: `Feedback recorded. Importance: ${learning.importance.toFixed(1)} → ${(learning.importance + importanceDelta).toFixed(1)}`,
+            text: `Feedback recorded. Importance: ${learning.importance.toFixed(1)} → ${Math.max(0.3, learning.importance + importanceDelta).toFixed(1)}`,
           }],
         };
       }

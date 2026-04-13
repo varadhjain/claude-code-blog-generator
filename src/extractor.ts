@@ -76,9 +76,27 @@ function parseJSONL(content: string): ParsedMessage[] {
   const lines = content.trim().split('\n');
   const messages: ParsedMessage[] = [];
 
+  // Track pending tool errors to attach to the next message
+  let pendingToolError = '';
+
   for (let i = 0; i < lines.length; i++) {
     try {
       const entry = JSON.parse(lines[i]);
+
+      // Handle top-level tool_result entries (Claude Code stores these as separate JSONL lines)
+      if (entry.type === 'tool_result' || (entry.content && !entry.message)) {
+        const isError = entry.is_error === true;
+        if (isError) {
+          const errorContent = typeof entry.content === 'string'
+            ? entry.content
+            : Array.isArray(entry.content)
+              ? entry.content.map((x: any) => x.text || '').join('\n')
+              : '';
+          if (errorContent) pendingToolError += '\n[TOOL ERROR]: ' + errorContent;
+        }
+        continue;
+      }
+
       if (!entry.message) continue;
 
       const role = entry.message.role || entry.type;
@@ -94,7 +112,7 @@ function parseJSONL(content: string): ParsedMessage[] {
           .map((c: any) => c.text)
           .join('\n');
 
-        // Also capture tool results (errors are high signal)
+        // Capture inline tool results
         const toolResults = entry.message.content
           .filter((c: any) => c.type === 'tool_result')
           .map((c: any) => {
@@ -107,19 +125,26 @@ function parseJSONL(content: string): ParsedMessage[] {
         if (toolResults) text += '\n' + toolResults;
       }
 
+      // Attach any pending tool errors
+      if (pendingToolError) {
+        text += pendingToolError;
+        pendingToolError = '';
+      }
+
       if (!text.trim()) continue;
 
       // Detect signals
       const lowerText = text.toLowerCase();
-      const hasError = /error|exception|traceback|failed|ENOTFOUND|ECONNREFUSED|exit code [1-9]|❌/i.test(text);
-      const hasToolFailure = /tool_result.*error|command failed|exit code [1-9]/i.test(text);
-      const isCorrection = role === 'user' && /\b(no|not that|don't|stop|wrong|instead|actually|try|rather)\b/i.test(text) && text.length < 500;
+      const hasError = /error|exception|traceback|failed|ENOTFOUND|ECONNREFUSED|exit code [1-9]|❌|\[TOOL ERROR\]/i.test(text);
+      const hasToolFailure = /\[TOOL ERROR\]|command failed|exit code [1-9]/i.test(text);
+      // Require multi-word correction phrases to avoid false positives on "no worries", "try this"
+      const isCorrection = role === 'user' && /\b(no,|not that|don't do|stop |that's wrong|instead of|wait,? actually|no —|no -)\b/i.test(text) && text.length < 500;
       const isPivot = role === 'assistant' && /\b(different approach|let me try|instead of|actually,? let's|won't work|alternative)\b/i.test(lowerText);
 
       messages.push({
         index: i,
         role: role as 'user' | 'assistant',
-        content: text.substring(0, 2000), // cap per message
+        content: text.substring(0, 3000), // larger cap — errors/traces need room
         hasError,
         hasToolFailure,
         isCorrection,
@@ -137,69 +162,56 @@ function parseJSONL(content: string): ParsedMessage[] {
 // EPISODE SEGMENTATION
 // ============================================================================
 
+/**
+ * Anchor-based segmentation: find high-signal "anchor" messages, then extract
+ * a window of context around each one. This keeps the lead-up (what was tried)
+ * and the resolution (what fixed it) together in one episode.
+ */
 function segmentEpisodes(messages: ParsedMessage[]): Episode[] {
+  const CONTEXT_BEFORE = 4;  // messages before the anchor
+  const CONTEXT_AFTER = 15;  // messages after (resolution can take several turns)
   const episodes: Episode[] = [];
-  let currentEpisode: ParsedMessage[] = [];
-  let currentSignal: Episode['signal'] = 'routine';
+  const usedIndices = new Set<number>();
 
-  function flushEpisode() {
-    if (currentEpisode.length < 2) {
-      currentEpisode = [];
-      currentSignal = 'routine';
-      return;
-    }
+  // Find anchor messages (high-signal events)
+  const anchors: Array<{ idx: number; signal: Episode['signal'] }> = [];
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.hasToolFailure) anchors.push({ idx: i, signal: 'tool_failure' });
+    else if (msg.hasError) anchors.push({ idx: i, signal: 'error_recovery' });
+    else if (msg.isCorrection) anchors.push({ idx: i, signal: 'user_correction' });
+    else if (msg.isPivot) anchors.push({ idx: i, signal: 'approach_pivot' });
+  }
 
-    const summary = currentEpisode
+  // Extract window around each anchor
+  for (const anchor of anchors) {
+    const start = Math.max(0, anchor.idx - CONTEXT_BEFORE);
+    const end = Math.min(messages.length - 1, anchor.idx + CONTEXT_AFTER);
+
+    // Skip if this anchor overlaps significantly with an already-extracted episode
+    const windowIndices = [];
+    for (let i = start; i <= end; i++) windowIndices.push(i);
+    const overlapCount = windowIndices.filter(i => usedIndices.has(i)).length;
+    if (overlapCount > windowIndices.length * 0.5) continue;
+
+    const episodeMessages = messages.slice(start, end + 1);
+    windowIndices.forEach(i => usedIndices.add(i));
+
+    const summary = episodeMessages
       .slice(0, 3)
       .map(m => m.content.substring(0, 100))
       .join(' | ');
 
     episodes.push({
-      startIndex: currentEpisode[0].index,
-      endIndex: currentEpisode[currentEpisode.length - 1].index,
-      messages: currentEpisode,
-      signal: currentSignal,
+      startIndex: episodeMessages[0].index,
+      endIndex: episodeMessages[episodeMessages.length - 1].index,
+      messages: episodeMessages,
+      signal: anchor.signal,
       summary,
     });
-
-    currentEpisode = [];
-    currentSignal = 'routine';
   }
 
-  for (const msg of messages) {
-    // Detect episode boundaries (high-signal events start new episodes)
-    if (msg.hasError || msg.isCorrection || msg.isPivot) {
-      // If we already have messages, flush as routine first
-      if (currentEpisode.length > 0 && currentSignal === 'routine') {
-        flushEpisode();
-      }
-
-      // Upgrade signal
-      if (msg.hasError || msg.hasToolFailure) {
-        currentSignal = currentSignal === 'routine' ? 'error_recovery' : currentSignal;
-        if (msg.hasToolFailure) currentSignal = 'tool_failure';
-      }
-      if (msg.isCorrection) currentSignal = 'user_correction';
-      if (msg.isPivot) currentSignal = 'approach_pivot';
-    }
-
-    currentEpisode.push(msg);
-
-    // If we've accumulated enough messages after a signal event, flush
-    if (currentSignal !== 'routine' && currentEpisode.length >= 6) {
-      flushEpisode();
-    }
-
-    // Long routine episodes get flushed
-    if (currentSignal === 'routine' && currentEpisode.length >= 10) {
-      flushEpisode();
-    }
-  }
-
-  flushEpisode();
-
-  // Only return episodes with learning signal
-  return episodes.filter(e => e.signal !== 'routine');
+  return episodes;
 }
 
 // ============================================================================
