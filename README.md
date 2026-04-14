@@ -2,7 +2,7 @@
 
 **Turn your Claude Code sessions into publishable developer content. Automatically.**
 
-[![npm version](https://img.shields.io/npm/v/claude-code-blog-generator)](https://www.npmjs.com/package/claude-code-blog-generator)
+[![GitHub stars](https://img.shields.io/github/stars/varadhjain/claude-code-blog-generator)](https://github.com/varadhjain/claude-code-blog-generator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
@@ -17,7 +17,7 @@ You just spent 2 hours building something cool with Claude Code. The session had
 ## Quick Start
 
 ```bash
-npm install -g claude-code-blog-generator
+npm install -g github:varadhjain/claude-code-blog-generator
 ccblog --setup    # guided setup (picks your AI provider)
 ccblog            # interactive session picker
 ```
