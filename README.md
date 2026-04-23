@@ -1,6 +1,6 @@
 # ccblog
 
-**Turn your Claude Code sessions into publishable developer content. Automatically.**
+**A Claude Code session toolkit: search, distill, and publish your history.**
 
 [![GitHub stars](https://img.shields.io/github/stars/varadhjain/claude-code-blog-generator)](https://github.com/varadhjain/claude-code-blog-generator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,19 +10,30 @@
 
 ## Why?
 
-You just spent 2 hours building something cool with Claude Code. The session had great decision moments, clever pivots, real debugging stories. But the `.jsonl` file sitting in `~/.claude/projects/` is unreadable, and you'll never turn it into a blog post manually.
+Your `~/.claude/projects/` is hundreds of megabytes of `.jsonl` transcripts — unsearchable, unreadable, and expensive to point Claude at. `ccblog` turns that archive into something useful:
 
-**ccblog** reads your Claude Code sessions and generates publishable blog posts + interactive HTML viewers with one command. AI detects the phases, key decisions, and narrative arc. Upload to Gist, cross-post to Dev.to, or just keep drafts accumulating automatically.
+- 🔎 **Search** — BM25 full-text search over every past session. Sub-ms queries. No API key needed.
+- 🧠 **Learn** — extract structured learnings from sessions so future agents can query "have we solved this before?"
+- ✍️ **Publish** — generate polished blog posts + interactive HTML viewers from any session.
+
+All local. All optional. Search works offline with zero network calls.
 
 ## Quick Start
 
 ```bash
 npm install -g github:varadhjain/claude-code-blog-generator
-ccblog --setup    # guided setup (picks your AI provider)
-ccblog            # interactive session picker
+
+# Search (no API key required — fully local BM25 over SQLite FTS5)
+ccblog index                 # one-time: build the search index
+ccblog search "auth bug"     # find past sessions by topic
+ccblog watch                 # keep the index live-updated
+
+# Learn + publish (requires an API key)
+ccblog --setup               # picks Anthropic or OpenAI
+ccblog                       # interactive: session → blog post
 ```
 
-Works with **Anthropic** (Claude Haiku) or **OpenAI** (gpt-5-nano). Uses whichever API key you have. Cost: ~$0.001 per session.
+Search is free and instant. Blog/learn features use **Anthropic** (Claude Haiku) or **OpenAI** (gpt-5-nano) at ~$0.001/session.
 
 ## What You Get
 
@@ -44,7 +55,33 @@ Session .jsonl  →  ccblog  →  4 files:
 
 **[See a live example →](https://gistpreview.github.io/?403f012649b153984ff46284e8cfc430/index.html)**
 
-## Usage
+## Search (no API key)
+
+BM25 full-text index over every session in `~/.claude/projects/`. Sub-ms queries. Zero network calls. The index lives at `~/.ccblog/session-index.db` and filters out `tool_result` blobs (which make JSONL huge but rarely help search).
+
+```bash
+ccblog index                           # build/update the index (incremental)
+ccblog watch                           # initial index + live tail on JSONL appends
+ccblog search "jwt middleware"         # BM25 search — ranked results + snippets
+ccblog files "src/auth/middleware.ts"  # every session that touched a file
+ccblog sessions                        # 20 most recent sessions
+```
+
+**Tuning:** four BM25 field weights in `src/search/weights.ts` control ranking (user text, assistant text, tool calls, file paths). No reindex needed after changes.
+
+**As an MCP server** (one server, all tools — search + learnings):
+
+```json
+{
+  "mcpServers": {
+    "ccblog": { "command": "ccblog", "args": ["serve"] }
+  }
+}
+```
+
+Exposes `search_sessions`, `read_session_window`, `list_sessions_by_file`, `list_recent_sessions` alongside the existing learnings tools. Tool descriptions instruct Claude not to persist snippets to `MEMORY.md`.
+
+## Usage — blog generation
 
 ```bash
 # Interactive mode — pick a session, analyze, upload to Gist
@@ -115,15 +152,18 @@ Set in `.env` file or environment. The setup wizard (`ccblog --setup`) walks you
 ## Requirements
 
 - **Node.js** 18+
-- **API key** — Anthropic or OpenAI
+- **API key** — Anthropic or OpenAI (only for blog/learn features; search works without)
 - **GitHub CLI** (optional) — for Gist upload (`brew install gh`)
 
-## Security
+## Privacy & Security
 
-- API keys read from `.env` or environment (never hardcoded or logged)
-- `.env` and `.jsonl` files are gitignored
-- PII redaction available for all published content
-- Review generated files before uploading — sessions may contain sensitive code
+**Search is fully local.** `ccblog index`, `ccblog watch`, and all `search_*` MCP tools make **zero network calls**. Your session transcripts never leave your machine for these paths. The index lives at `~/.ccblog/session-index.db` (SQLite) and only stores filtered message text — `tool_result` blobs are dropped at ingest time.
+
+**Blog / learnings features are opt-in and use an API key you control.** API keys are read from `.env` or the environment (never hardcoded or logged). `.env` and `.jsonl` files are gitignored. PII redaction is available for all published content.
+
+**Review generated files before uploading** — sessions may contain sensitive code or credentials.
+
+**Uninstall:** `rm -rf ~/.ccblog` clears everything this tool stored.
 
 ## Development
 

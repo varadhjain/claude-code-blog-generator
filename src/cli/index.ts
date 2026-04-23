@@ -308,6 +308,99 @@ async function main() {
     return;
   }
 
+  // Search subcommands — BM25 full-text over ~/.claude/projects. Zero network.
+  if (subcommand === 'search') {
+    const { openDb } = await import('../search/db');
+    const { searchSessions } = await import('../search/query');
+    const query = positional.slice(1).join(' ');
+    if (!query) {
+      console.error('Usage: ccblog search <query> [--limit N]');
+      process.exit(1);
+    }
+    const limitIdx = flags.indexOf('--limit');
+    const limit = limitIdx >= 0 ? Number(args[args.indexOf('--limit') + 1]) : 10;
+    const db = openDb();
+    const hits = searchSessions(db, query, limit);
+    if (hits.length === 0) { console.log('no matches — run `ccblog index` first?'); return; }
+    for (const h of hits) {
+      const date = h.last_msg_at ? new Date(h.last_msg_at).toISOString().slice(0, 16).replace('T', ' ') : '—';
+      console.log(`\n[${h.score.toFixed(2)}] ${h.project}  ${date}  msg#${h.best_msg_index}`);
+      console.log(`  ${h.session_id}`);
+      if (h.first_user_prompt) console.log(`  ↳ ${h.first_user_prompt.replace(/\s+/g, ' ').slice(0, 100)}`);
+      console.log(`  "${h.snippet.replace(/\s+/g, ' ').slice(0, 200)}"`);
+    }
+    return;
+  }
+
+  if (subcommand === 'index') {
+    const { openDb } = await import('../search/db');
+    const { indexAll } = await import('../search/indexer');
+    const db = openDb();
+    const t0 = Date.now();
+    const stats = indexAll(db);
+    console.log(`indexed ${stats.messagesIndexed} new messages from ${stats.filesChanged}/${stats.filesScanned} files (${(stats.bytesIngested / 1e6).toFixed(1)} MB) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    return;
+  }
+
+  if (subcommand === 'watch') {
+    const { openDb } = await import('../search/db');
+    const { indexAll, indexFile, DEFAULT_SESSIONS_ROOT } = await import('../search/indexer');
+    const chokidar = (await import('chokidar')).default;
+    const db = openDb();
+    const t0 = Date.now();
+    const stats = indexAll(db);
+    console.log(`initial: ${stats.messagesIndexed} msgs from ${stats.filesChanged}/${stats.filesScanned} files in ${((Date.now() - t0) / 1000).toFixed(1)}s. watching…`);
+    const pending = new Map<string, NodeJS.Timeout>();
+    const schedule = (file: string) => {
+      const existing = pending.get(file);
+      if (existing) clearTimeout(existing);
+      pending.set(file, setTimeout(() => {
+        pending.delete(file);
+        try {
+          const r = indexFile(db, file);
+          if (r.messagesIndexed > 0) console.log(`+${r.messagesIndexed} msg  ${file.split('/').slice(-2).join('/')}`);
+        } catch (e) {
+          console.error(`indexFile failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }, 400));
+    };
+    const watcher = chokidar.watch(`${DEFAULT_SESSIONS_ROOT}/**/*.jsonl`, { ignoreInitial: true, awaitWriteFinish: false });
+    watcher.on('add', schedule);
+    watcher.on('change', schedule);
+    process.on('SIGINT', () => { watcher.close(); process.exit(0); });
+    return;
+  }
+
+  if (subcommand === 'files') {
+    const { openDb } = await import('../search/db');
+    const { listSessionsByFile } = await import('../search/query');
+    const filePath = positional.slice(1).join(' ');
+    if (!filePath) { console.error('Usage: ccblog files <path>'); process.exit(1); }
+    const db = openDb();
+    const rows = listSessionsByFile(db, filePath, 20);
+    for (const r of rows) {
+      const date = r.last_msg_at ? new Date(r.last_msg_at).toISOString().slice(0, 16).replace('T', ' ') : '—';
+      console.log(`${date}  ${r.project.padEnd(40)}  ${r.session_id}`);
+      if (r.first_user_prompt) console.log(`  ↳ ${r.first_user_prompt.replace(/\s+/g, ' ').slice(0, 100)}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'sessions') {
+    // Renamed from bare `recent` to avoid confusion with the existing
+    // learnings-oriented list_recent MCP tool.
+    const { openDb } = await import('../search/db');
+    const { listRecent } = await import('../search/query');
+    const db = openDb();
+    const rows = listRecent(db, 20);
+    for (const r of rows) {
+      const date = r.last_msg_at ? new Date(r.last_msg_at).toISOString().slice(0, 16).replace('T', ' ') : '—';
+      console.log(`${date}  ${r.project.padEnd(40)}  ${r.msg_count.toString().padStart(5)} msgs  ${r.session_id}`);
+      if (r.first_user_prompt) console.log(`  ↳ ${r.first_user_prompt.replace(/\s+/g, ' ').slice(0, 100)}`);
+    }
+    return;
+  }
+
   // Check for 'extract' subcommand
   if (subcommand === 'extract') {
     const sessionPath = positional[1]; // file path, if provided
@@ -335,11 +428,16 @@ async function main() {
 
   // Check for --help flag
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('ccblog — Turn Claude Code sessions into content + agent learnings\n');
+    console.log('ccblog — Claude Code session toolkit: search, extract, generate\n');
     console.log('Commands:');
     console.log('  ccblog              Interactive session → blog post');
+    console.log('  ccblog search <q>   BM25 full-text search over all past sessions (no API key needed)');
+    console.log('  ccblog index        Build/update the local search index');
+    console.log('  ccblog watch        Live-tail index: initial build + auto-update on JSONL append');
+    console.log('  ccblog files <p>    List every session that touched a file path');
+    console.log('  ccblog sessions     List the 20 most recent sessions');
     console.log('  ccblog extract      Extract learnings from latest session (or: ccblog extract <path>)');
-    console.log('  ccblog serve        Start MCP server (exposes learnings to other agents)\n');
+    console.log('  ccblog serve        Start MCP server (search + learnings, for other agents)\n');
     console.log('Flags:');
     console.log('  --auto              Auto-analyze latest session + extract learnings');
     console.log('  --redact            PII redaction (API keys, emails, paths)');
