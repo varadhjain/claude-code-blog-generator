@@ -41,7 +41,11 @@ async function startServer() {
       capabilities: {
         tools: {},
       },
-      instructions: 'Search learnings extracted from past Claude Code sessions. Use search_learnings when you encounter errors, need patterns, or want to check if a problem has been solved before.',
+      instructions:
+        'Two layers over your Claude Code history: ' +
+        '(1) full-text SEARCH of raw session transcripts via BM25 — use search_sessions / read_session_window / list_sessions_by_file / list_recent_sessions for "where did I work on X" or "what did I try when Y broke". ' +
+        '(2) LEARNINGS distilled from past sessions — use search_learnings / get_learning / list_recent for "have we solved this problem before". ' +
+        'IMPORTANT: do NOT persist snippets from session tools into MEMORY.md; re-query dynamically to keep per-turn context small.',
     }
   );
 
@@ -93,6 +97,54 @@ async function startServer() {
             useful: { type: 'boolean' as const, description: 'Was this learning helpful?' },
           },
           required: ['id', 'useful'],
+        },
+      },
+      // ── Raw-session full-text tools (BM25) ─────────────────────────
+      {
+        name: 'search_sessions',
+        description:
+          'BM25 full-text search across every past Claude Code session transcript. Use for "where did I work on X", "which session discussed Y", or finding prior conversations. Returns ranked hits with snippet, session id, project, date. Zero network calls. Do NOT persist snippets to memory; re-query as needed.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            query: { type: 'string' as const, description: 'FTS5 query. Supports AND/OR/NOT, "quoted phrases", and column filters (user_text: / assistant_text: / tool_calls: / file_paths:).' },
+            limit: { type: 'number' as const, description: 'Max results (default 10).' },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'read_session_window',
+        description: 'Fetch a token-capped window of messages around a specific message index in a session. Use after search_sessions to zoom in. Do NOT persist to memory.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            session_id: { type: 'string' as const },
+            around_msg_index: { type: 'number' as const, description: 'Message ordinal to center the window on (from search results).' },
+            max_tokens: { type: 'number' as const, description: 'Token budget for returned content (default 2000).' },
+            radius: { type: 'number' as const, description: 'Max messages each side to consider (default 40).' },
+          },
+          required: ['session_id', 'around_msg_index'],
+        },
+      },
+      {
+        name: 'list_sessions_by_file',
+        description: 'List sessions that touched a given file path (Read/Edit/Write/Glob/Grep). Substring match supported.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            file_path: { type: 'string' as const, description: 'Full or partial file path.' },
+            limit: { type: 'number' as const, description: 'Max results (default 20).' },
+          },
+          required: ['file_path'],
+        },
+      },
+      {
+        name: 'list_recent_sessions',
+        description: 'List the N most recently active Claude Code sessions (distinct from list_recent, which returns extracted learnings).',
+        inputSchema: {
+          type: 'object' as const,
+          properties: { limit: { type: 'number' as const, description: 'Max results (default 20).' } },
         },
       },
     ],
@@ -222,6 +274,44 @@ async function startServer() {
             text: `Feedback recorded. Importance: ${learning.importance.toFixed(1)} → ${newImportance.toFixed(1)}`,
           }],
         };
+      }
+
+      case 'search_sessions': {
+        const { openDb } = await import('./search/db');
+        const { searchSessions } = await import('./search/query');
+        const db = openDb();
+        const hits = searchSessions(db, String(toolArgs.query ?? ''), Number(toolArgs.limit ?? 10));
+        return { content: [{ type: 'text', text: JSON.stringify(hits, null, 2) }] };
+      }
+
+      case 'read_session_window': {
+        const { openDb } = await import('./search/db');
+        const { readWindow } = await import('./search/query');
+        const db = openDb();
+        const msgs = readWindow(
+          db,
+          String(toolArgs.session_id),
+          Number(toolArgs.around_msg_index),
+          Number(toolArgs.max_tokens ?? 2000),
+          Number(toolArgs.radius ?? 40),
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(msgs, null, 2) }] };
+      }
+
+      case 'list_sessions_by_file': {
+        const { openDb } = await import('./search/db');
+        const { listSessionsByFile } = await import('./search/query');
+        const db = openDb();
+        const rows = listSessionsByFile(db, String(toolArgs.file_path), Number(toolArgs.limit ?? 20));
+        return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] };
+      }
+
+      case 'list_recent_sessions': {
+        const { openDb } = await import('./search/db');
+        const { listRecent } = await import('./search/query');
+        const db = openDb();
+        const rows = listRecent(db, Number(toolArgs.limit ?? 20));
+        return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] };
       }
 
       default:
