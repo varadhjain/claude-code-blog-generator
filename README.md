@@ -57,7 +57,7 @@ Session .jsonl  →  ccblog  →  4 files:
 
 ## Search (no API key)
 
-BM25 full-text index over every session in `~/.claude/projects/`. Sub-ms queries. Zero network calls. The index lives at `~/.ccblog/session-index.db` and filters out `tool_result` blobs (which make JSONL huge but rarely help search).
+BM25 full-text index over every session in `~/.claude/projects/` **and** `~/.codex/sessions/`. Sub-ms queries. Zero network calls. The index lives at `~/.ccblog/session-index.db` and filters out `tool_result` blobs (which make JSONL huge but rarely help search).
 
 ```bash
 ccblog index                           # build/update the index (incremental)
@@ -67,7 +67,72 @@ ccblog files "src/auth/middleware.ts"  # every session that touched a file
 ccblog sessions                        # 20 most recent sessions
 ```
 
+**Codex CLI support.** Sessions from OpenAI's Codex CLI (`~/.codex/sessions/YYYY/MM/DD/*.jsonl`) are indexed alongside Claude Code sessions. Each result has a `source: 'claude-code' | 'codex'` field. The indexer auto-detects both — no flag required.
+
 **Tuning:** four BM25 field weights in `src/search/weights.ts` control ranking (user text, assistant text, tool calls, file paths). No reindex needed after changes.
+
+## Privacy model — three trust zones
+
+ccblog operates in three zones with different access rules:
+
+| Zone | Examples | Access |
+|---|---|---|
+| **Local-personal** | `ccblog search`, MCP queries, learning extraction, on-demand blog generation | Always frictionless. No gates. Every learning is visible. |
+| **Personal outputs** | Blog posts you publish, gists you upload | You author each one. Per-action consent is built into the act of publishing. |
+| **Outbound / admin** | Future: team sync, scheduled auto-share | Hard gate. Only ever ships items you've explicitly marked share-ready. Automation cannot bypass per-item approval. |
+
+The `share_status` field on each learning means **"ready to leave the machine,"** not "ready to use." Local features ignore it entirely. New extractions default to `'local'`. Run `ccblog review` to triage.
+
+### Lifecycle of a learning
+
+```
+         ccblog extract
+              │
+              ▼
+       ┌─────────────┐
+       │    local    │ ◄── default for every new learning
+       │  📝  draft  │     (also: re-review with --all)
+       └─────────────┘
+        │           │
+   share-ready   keep-private
+        │           │
+        ▼           ▼
+ ┌────────────┐  ┌────────────┐
+ │  reviewed  │  │  private   │ ◄── stays here, never leaves
+ │ ✅ eligible│  │ 🔒 kept    │
+ │  to share  │  │  local-only│
+ └────────────┘  └────────────┘
+        ▲              ▲
+        └─re-decide────┘  (ccblog review --all)
+```
+
+### Who can see each state
+
+```
+                       │ local │ reviewed │ private │
+─────────────────────────────────────────────────────
+ ccblog search         │   ✓   │    ✓     │    ✓    │   Zone 1 — local
+ MCP search_learnings  │   ✓   │    ✓     │    ✓    │     (no gate)
+ MCP search_sessions   │   ✓   │    ✓     │    ✓    │
+ ccblog blog (manual)  │   ✓   │    ✓     │    ✓    │
+─────────────────────────────────────────────────────
+ You publish a gist    │   ✓*  │    ✓*    │    ✓*   │   Zone 2 — per
+   *consent = the act of running the publish command  │     -action consent
+─────────────────────────────────────────────────────
+ Future team sync      │   ✗   │    ✓     │    ✗    │   Zone 3 — hard gate,
+ Future scheduled push │   ✗   │    ✓     │    ✗    │     automation can
+                                                          never bypass
+```
+
+```bash
+ccblog review              # interactive triage of pending drafts
+ccblog review --all        # include already-decided items
+ccblog status              # how many drafts are pending? (--count for shell prompt)
+```
+
+Each item shows: type, problem, solution, files touched, **what the redactor stripped** (counts + categories), and current status. Choose `share-ready` / `keep-private` / `edit tags` / `delete` / `skip` / `quit`.
+
+The outbound publisher (Notion / git / S3 / etc) is **intentionally not built yet** — the contract is that the *gate exists before any door does*. Any future publisher MUST refuse to read anything other than `share_status === 'reviewed'`.
 
 **As an MCP server** (one server, all tools — search + learnings):
 

@@ -1,11 +1,13 @@
 import type { Database } from 'better-sqlite3';
 import { BM25_WEIGHTS } from './weights';
+import type { Source } from './indexer';
 
 const W = BM25_WEIGHTS;
 
 export interface SearchHit {
   session_id: string;
   project: string;
+  source: Source;
   started_at: number | null;
   last_msg_at: number | null;
   msg_count: number;
@@ -20,16 +22,25 @@ export interface SearchHit {
 /**
  * Full-text search with BM25 field weights. Returns one hit per SESSION
  * (the best-ranked message in that session + session metadata).
+ *
+ * Optional `sources` filter is applied via the sessions table, NOT FTS MATCH —
+ * UNINDEXED FTS columns can't participate in MATCH expressions.
  */
-export function searchSessions(db: Database, query: string, limit: number = 10): SearchHit[] {
-  // Per-message ranking with weighted BM25. UNINDEXED columns still count as
-  // columns for bm25(); pass 0 for them so their ordinal position matches.
+export function searchSessions(
+  db: Database,
+  query: string,
+  limit: number = 10,
+  sources?: Source[],
+): SearchHit[] {
+  // Per-message ranking with weighted BM25. UNINDEXED columns (session_id,
+  // msg_index, ts, source) take weight 0 — their ordinal position must match
+  // the schema or BM25 will misalign columns.
   const perMessage = db.prepare(`
     SELECT
       session_id,
       msg_index AS best_msg_index,
       ts AS best_ts,
-      bm25(messages_fts, 0, 0, 0, ?, ?, ?, ?) AS score,
+      bm25(messages_fts, 0, 0, 0, 0, ?, ?, ?, ?) AS score,
       snippet(messages_fts, -1, '[', ']', '…', 20) AS snippet
     FROM messages_fts
     WHERE messages_fts MATCH ?
@@ -50,19 +61,20 @@ export function searchSessions(db: Database, query: string, limit: number = 10):
   const seen = new Map<string, typeof perMessage[number]>();
   for (const row of perMessage) {
     if (!seen.has(row.session_id)) seen.set(row.session_id, row);
-    if (seen.size >= limit) break;
+    if (seen.size >= limit * 2) break;   // overshoot in case source filter trims
   }
 
   const ids = [...seen.keys()];
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => '?').join(',');
   const meta = db.prepare(`
-    SELECT session_id, project, cwd, started_at, last_msg_at, msg_count, first_user_prompt
+    SELECT session_id, project, cwd, started_at, last_msg_at, msg_count, first_user_prompt, source
     FROM sessions WHERE session_id IN (${placeholders})
   `).all(...ids) as Array<{
     session_id: string; project: string; cwd: string | null;
     started_at: number | null; last_msg_at: number | null;
     msg_count: number; first_user_prompt: string | null;
+    source: Source;
   }>;
   const metaById = new Map(meta.map(m => [m.session_id, m]));
 
@@ -70,9 +82,11 @@ export function searchSessions(db: Database, query: string, limit: number = 10):
   for (const [sid, row] of seen) {
     const m = metaById.get(sid);
     if (!m) continue;
+    if (sources && !sources.includes(m.source)) continue;
     hits.push({
       session_id: sid,
       project: m.project,
+      source: m.source,
       started_at: m.started_at,
       last_msg_at: m.last_msg_at,
       msg_count: m.msg_count,
@@ -83,6 +97,7 @@ export function searchSessions(db: Database, query: string, limit: number = 10):
       score: row.score,
       cwd: m.cwd,
     });
+    if (hits.length >= limit) break;
   }
   return hits;
 }

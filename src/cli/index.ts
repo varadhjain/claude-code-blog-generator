@@ -402,6 +402,26 @@ async function main() {
   }
 
   // Check for 'extract' subcommand
+  if (subcommand === 'review') {
+    const { runReview } = await import('./review-tui');
+    await runReview({ all: flags.includes('--all') });
+    return;
+  }
+
+  if (subcommand === 'status') {
+    const { pendingReviewCount } = await import('./review-tui');
+    const n = await pendingReviewCount();
+    if (flags.includes('--quiet') || flags.includes('--count')) {
+      // Shell-prompt-friendly: just the number on stdout, nothing else.
+      process.stdout.write(`${n}\n`);
+    } else if (n === 0) {
+      console.log('✅ No drafts pending review.');
+    } else {
+      console.log(`📝 ${n} draft learning(s) pending — run \`ccblog review\``);
+    }
+    return;
+  }
+
   if (subcommand === 'extract') {
     const sessionPath = positional[1]; // file path, if provided
     if (!sessionPath) {
@@ -432,12 +452,17 @@ async function main() {
     console.log('Commands:');
     console.log('  ccblog              Interactive session → blog post');
     console.log('  ccblog search <q>   BM25 full-text search over all past sessions (no API key needed)');
-    console.log('  ccblog index        Build/update the local search index');
+    console.log('  ccblog index        Build/update the local search index (Claude Code + Codex)');
     console.log('  ccblog watch        Live-tail index: initial build + auto-update on JSONL append');
     console.log('  ccblog files <p>    List every session that touched a file path');
     console.log('  ccblog sessions     List the 20 most recent sessions');
     console.log('  ccblog extract      Extract learnings from latest session (or: ccblog extract <path>)');
+    console.log('  ccblog review       Triage extracted learnings before they\'re eligible for sharing');
+    console.log('  ccblog status       Show count of drafts pending review (--count for plain int)');
     console.log('  ccblog serve        Start MCP server (search + learnings, for other agents)\n');
+    console.log('Privacy model:');
+    console.log('  Local features (search, MCP, blog gen) ALWAYS use every learning.');
+    console.log('  `ccblog review` only governs what\'s eligible to leave this machine.\n');
     console.log('Flags:');
     console.log('  --auto              Auto-analyze latest session + extract learnings');
     console.log('  --redact            PII redaction (API keys, emails, paths)');
@@ -490,6 +515,16 @@ async function main() {
     } catch (err) {
       if (!quietMode) console.error('⚠️  Learning extraction failed (draft was saved):', (err as Error).message);
     }
+
+    // Notify-and-defer: hooks have no TTY so we can't open the review TUI here.
+    // Always emit the nudge to stderr — it survives --quiet on stdout (auto
+    // mode silences output meant for users, but pending drafts is a signal
+    // that should reach the user's next interactive shell).
+    try {
+      const { pendingReviewCount } = await import('./review-tui');
+      const n = await pendingReviewCount();
+      if (n > 0) console.error(`📝 ${n} draft learning(s) pending — run \`ccblog review\``);
+    } catch { /* best-effort */ }
     return;
   }
 
