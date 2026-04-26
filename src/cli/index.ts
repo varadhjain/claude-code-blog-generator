@@ -401,6 +401,47 @@ async function main() {
     return;
   }
 
+  if (subcommand === 'reflect') {
+    const { runReflect, parseSince } = await import('../reflect');
+    const sinceFlag = (() => { const i = args.indexOf('--since'); return i >= 0 ? args[i + 1] : '7d'; })();
+    const projectFlag = (() => { const i = args.indexOf('--project'); return i >= 0 ? args[i + 1] : undefined; })();
+    const toneFlag = (() => {
+      const i = args.indexOf('--tone');
+      const v = i >= 0 ? args[i + 1] : 'honest';
+      return (['gentle', 'honest', 'sharp'] as const).includes(v as any) ? v : 'honest';
+    })() as 'gentle' | 'honest' | 'sharp';
+    const dryRun = flags.includes('--dry-run');
+
+    let sinceMs: number;
+    try { sinceMs = parseSince(sinceFlag); }
+    catch (e) { console.error((e as Error).message); process.exit(1); }
+
+    if (!dryRun) {
+      const { ready } = await quickSetupCheck();
+      if (!ready) {
+        console.error('❌ Reflection needs an API key. Run: ccblog --setup');
+        process.exit(1);
+      }
+    }
+
+    console.log(`🪞 Reflecting on the last ${sinceFlag}${projectFlag ? ` (project: ${projectFlag})` : ''}…`);
+    const result = await runReflect({ sinceMs, project: projectFlag, tone: toneFlag, dryRun });
+
+    if (result.digest.sessions.length === 0) {
+      console.log('   No sessions found in window. (Did you run `ccblog index` recently?)');
+      return;
+    }
+
+    if (dryRun) {
+      console.error(`\n--- digest only (no LLM call) — ${result.digest.total_sessions} sessions, ${result.digest.total_messages} msgs ---`);
+      return;
+    }
+
+    console.log(`✅ Saved: ${result.artifactPath}`);
+    console.log(`   ${result.digest.total_sessions} sessions analyzed, tone=${toneFlag}`);
+    return;
+  }
+
   // Check for 'extract' subcommand
   if (subcommand === 'review') {
     const { runReview } = await import('./review-tui');
@@ -457,6 +498,8 @@ async function main() {
     console.log('  ccblog files <p>    List every session that touched a file path');
     console.log('  ccblog sessions     List the 20 most recent sessions');
     console.log('  ccblog extract      Extract learnings from latest session (or: ccblog extract <path>)');
+    console.log('  ccblog reflect      Weekly retrospective: digest last 7 days + LLM review');
+    console.log('                       (--since 14d, --project name, --tone gentle|honest|sharp, --dry-run)');
     console.log('  ccblog review       Triage extracted learnings before they\'re eligible for sharing');
     console.log('  ccblog status       Show count of drafts pending review (--count for plain int)');
     console.log('  ccblog serve        Start MCP server (search + learnings, for other agents)\n');

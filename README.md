@@ -71,6 +71,28 @@ ccblog sessions                        # 20 most recent sessions
 
 **Tuning:** four BM25 field weights in `src/search/weights.ts` control ranking (user text, assistant text, tool calls, file paths). No reindex needed after changes.
 
+## Reflect — weekly retrospective
+
+```bash
+ccblog reflect                                # last 7 days, honest tone
+ccblog reflect --since 14d                    # custom window (Nd, Nw, Nh)
+ccblog reflect --project investing            # narrow to one project
+ccblog reflect --tone gentle                  # gentle / honest (default) / sharp
+ccblog reflect --since 7d --dry-run           # print the digest, skip the LLM
+```
+
+Pulls every session in the window from the search index, builds a citation-tagged digest (~3-5k tokens), and asks the LLM for a structured retrospective:
+
+- **What I worked on** — projects + threads
+- **What went smoothly** — fast resolutions, prompts that worked first-try
+- **Where I struggled** — rework, fights with the tool, reversed decisions
+- **Patterns I'm repeating** — only patterns supported by ≥2 sessions
+- **Specific things to try differently** — concrete changes tied to evidence
+
+**Every claim cites sessions** as `[sid:msg#]`. The prompt explicitly forbids generalizing beyond evidence — "you always X" is rejected if there are only 2 instances.
+
+Artifacts save to `~/.ccblog/reflections/YYYY-WW_start_to_end.md` with `share_status: private` in the frontmatter — reflections catalogue weaknesses and never auto-leave the machine. Cost: ~$0.05 per weekly run.
+
 ## Privacy model — three trust zones
 
 ccblog operates in three zones with different access rules:
