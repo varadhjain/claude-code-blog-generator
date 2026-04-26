@@ -12,8 +12,23 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { execSync } from 'child_process';
 import { OpenAIClient } from './ai/client';
 import { redactContent } from './redactor';
+
+// Best-effort author identity. Falls back through git → $USER → 'unknown'.
+// Cached because git config is fast but we still call it for every learning.
+let cachedAuthor: string | null = null;
+export function detectAuthor(): string {
+  if (cachedAuthor) return cachedAuthor;
+  try {
+    const email = execSync('git config user.email', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+    if (email) return (cachedAuthor = email);
+  } catch { /* not in a repo, no git, etc */ }
+  cachedAuthor = process.env.USER || process.env.USERNAME || 'unknown';
+  return cachedAuthor;
+}
 
 // ============================================================================
 // TYPES
@@ -41,6 +56,7 @@ export interface Learning {
   source_date: string;
   files_touched: string[];
   languages: string[];
+  author?: string;          // git config user.email or $USER at extraction time
 
   // Retrieval metadata
   importance: number;
@@ -48,6 +64,16 @@ export interface Learning {
   times_useful: number;
   created_at: string;
   updated_at: string;
+
+  // Outbound-share gate. Local features (search, MCP, blog gen) IGNORE this
+  // field — it gates only what may leave this machine. A future publisher
+  // MUST refuse to read anything other than 'reviewed'.
+  share_status?: 'local' | 'reviewed' | 'private';
+  reviewed_at?: string | null;
+
+  // Summary of what the redactor stripped from the source session. We keep
+  // counts + categories, NOT the original sensitive content.
+  redaction_summary?: { count: number; types: string[] };
 }
 
 interface Episode {
@@ -238,10 +264,16 @@ Return JSON matching this schema:
   "languages": ["typescript"]
 }`;
 
+interface LearningContext {
+  author: string;
+  redaction_summary?: { count: number; types: string[] };
+}
+
 async function extractLearning(
   client: OpenAIClient,
   episode: Episode,
-  sessionId: string
+  sessionId: string,
+  ctx: LearningContext,
 ): Promise<Learning | null> {
   const episodeText = episode.messages
     .map(m => `[${m.role}${m.hasError ? ' ERROR' : ''}${m.isCorrection ? ' CORRECTION' : ''}${m.isPivot ? ' PIVOT' : ''}]: ${m.content}`)
@@ -281,11 +313,17 @@ Extract a structured learning from this episode. If it's not worth extracting, r
       source_date: now.substring(0, 10),
       files_touched: result.files_touched || [],
       languages: result.languages || [],
+      author: ctx.author,
       importance: 1.0,
       times_retrieved: 0,
       times_useful: 0,
       created_at: now,
       updated_at: now,
+      // New extractions are local-only by default. Outbound publishers
+      // must require share_status === 'reviewed'; they MUST refuse 'local'.
+      share_status: 'local',
+      reviewed_at: null,
+      redaction_summary: ctx.redaction_summary,
     };
   } catch (error) {
     // Don't fail the whole pipeline for one episode
@@ -315,9 +353,13 @@ export async function extractFromSession(
   log('📖 Parsing session...');
   let content = await fs.readFile(sessionPath, 'utf-8');
 
-  // Redact before processing (so LLM never sees sensitive content)
+  // Redact before processing (so LLM never sees sensitive content). Capture
+  // counts/types so the review TUI can show what got stripped.
+  let redactionSummary: { count: number; types: string[] } | undefined;
   if (options.redact) {
-    content = redactContent(content).content;
+    const r = redactContent(content);
+    content = r.content;
+    redactionSummary = { count: r.redactionCount, types: r.redactedTypes };
   }
 
   const messages = parseJSONL(content);
@@ -337,9 +379,13 @@ export async function extractFromSession(
   const client = new OpenAIClient();
   const learnings: Learning[] = [];
 
+  const ctx: LearningContext = {
+    author: detectAuthor(),
+    redaction_summary: redactionSummary,
+  };
   for (const episode of episodes) {
     log(`   Processing ${episode.signal} episode (${episode.messages.length} msgs)...`);
-    const learning = await extractLearning(client, episode, sessionId);
+    const learning = await extractLearning(client, episode, sessionId, ctx);
     if (learning) {
       learnings.push(learning);
       log(`   ✅ Extracted: ${learning.problem.substring(0, 80)}`);
@@ -355,6 +401,16 @@ export async function extractFromSession(
   for (const learning of learnings) {
     const filepath = path.join(learningsDir, `${learning.id}.json`);
     await fs.writeFile(filepath, JSON.stringify(learning, null, 2));
+  }
+
+  // Touch the pending-review marker so `ccblog status` (and shell prompts)
+  // can show that there are new drafts to triage.
+  if (learnings.length > 0) {
+    const marker = path.join(process.env.HOME!, '.ccblog', 'pending-review.json');
+    let prev: { ids: string[] } = { ids: [] };
+    try { prev = JSON.parse(await fs.readFile(marker, 'utf-8')); } catch {}
+    const next = { ids: Array.from(new Set([...prev.ids, ...learnings.map(l => l.id)])) };
+    await fs.writeFile(marker, JSON.stringify(next, null, 2));
   }
 
   log(`\n📚 Extracted ${learnings.length} learnings from ${episodes.length} episodes`);
