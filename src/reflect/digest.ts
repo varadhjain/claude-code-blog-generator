@@ -82,12 +82,16 @@ export function buildDigest(db: Database, opts: BuildOptions): Digest {
 
   // 2) Pull a sample of user prompts per session.
   //    Strategy: spread across the session, prefer longer prompts (signal).
+  //    msg_index 0 is excluded — that slot holds resume-context / system-prompt
+  //    blobs, not user-initiated work, and was producing false-positive patterns
+  //    in propose-skills (skills proposed from system-prompt echoes).
   const userPrompts = db.prepare(`
     SELECT session_id, msg_index, ts, user_text
     FROM messages_fts
     WHERE session_id IN (${placeholders})
       AND user_text != ''
       AND length(user_text) > 30
+      AND msg_index > 0
     ORDER BY session_id, length(user_text) DESC
   `).all(...ids) as Array<{ session_id: string; msg_index: number; ts: number; user_text: string }>;
 

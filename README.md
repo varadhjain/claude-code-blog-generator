@@ -13,8 +13,11 @@
 Your `~/.claude/projects/` is hundreds of megabytes of `.jsonl` transcripts — unsearchable, unreadable, and expensive to point Claude at. `ccblog` turns that archive into something useful:
 
 - 🔎 **Search** — BM25 full-text search over every past session. Sub-ms queries. No API key needed.
-- 🧠 **Learn** — extract structured learnings from sessions so future agents can query "have we solved this before?"
+- 🪞 **Reflect** — weekly retrospective with citations to actual sessions.
+- 🛠️ **Compound** — mine many sessions for new skills, memories, CLAUDE.md rules, and anti-patterns to fix. Every change makes the next session faster.
+- 🧠 **Learn** — extract structured learnings so future agents can query "have we solved this before?"
 - ✍️ **Publish** — generate polished blog posts + interactive HTML viewers from any session.
+- 📊 **Telemetry** — see which Skills you actually use vs. which are dead weight.
 
 All local. All optional. Search works offline with zero network calls.
 
@@ -28,8 +31,14 @@ ccblog index                 # one-time: build the search index
 ccblog search "auth bug"     # find past sessions by topic
 ccblog watch                 # keep the index live-updated
 
-# Learn + publish (requires an API key)
-ccblog --setup               # picks Anthropic or OpenAI
+# Reflect + compound (requires an API key)
+ccblog --setup                       # picks Anthropic or OpenAI
+ccblog reflect --since 7d            # weekly retro with citations
+ccblog propose-skills --since 30d    # mine repeated workflows → draft skills
+ccblog propose-memories --since 30d  # durable facts → memory entries
+ccblog anti-patterns --since 30d     # rediscovery / manual-toil / wrong-tool waste
+
+# Single-session blog
 ccblog                       # interactive: session → blog post
 ```
 
@@ -92,6 +101,63 @@ Pulls every session in the window from the search index, builds a citation-tagge
 **Every claim cites sessions** as `[sid:msg#]`. The prompt explicitly forbids generalizing beyond evidence — "you always X" is rejected if there are only 2 instances.
 
 Artifacts save to `~/.ccblog/reflections/YYYY-WW_start_to_end.md` with `share_status: private` in the frontmatter — reflections catalogue weaknesses and never auto-leave the machine. Cost: ~$0.05 per weekly run.
+
+## Compound — propose new skills, memories, and rules
+
+Instead of reading one session at a time, mine the last N sessions for repeated workflows that should become permanent context. Each command shares the same digest builder and the same hard rule: every proposal cites ≥2 distinct sessions or it gets dropped before write.
+
+```bash
+ccblog propose-skills --since 30d         # repeated manual workflows → draft skills
+ccblog propose-memories --since 30d       # durable facts/preferences → memory entries
+ccblog propose-claude-md --since 30d      # repeated corrections → CLAUDE.md rules
+ccblog anti-patterns --since 30d          # rediscovery / manual toil / wrong-tool waste
+
+# Shared flags for all four:
+#   --since 30d            time window (Nd / Nw / Nh)
+#   --project NAME         narrow to one project
+#   --workspace            ignore project filter, hint LLM toward cross-project patterns
+#   --min-sessions 3       stricter: require N distinct sessions (default 2)
+#   --dry-run              print the digest, skip the LLM
+```
+
+Output (one file per proposal, except anti-patterns which writes one digest):
+
+```
+~/.ccblog/skill-proposals/2026-04-29-<slug>.md
+~/.ccblog/memory-proposals/2026-04-29-<slug>.md
+~/.ccblog/claude-md-proposals/2026-04-29-NN-<slug>.md
+~/.ccblog/anti-patterns/2026-04-29.md
+```
+
+Each proposal has a frontmatter review header (citations, confidence, target install dir) and a clearly-marked "copy below this line" body. Nothing auto-installs — you review and paste.
+
+**Why this works:** the LLM sees ~3-5k tokens of digested signal (user prompts, assistant decisions, tool signatures, files touched) tagged with `[sid:msg#]` citations. It cannot fabricate proposals — every one must cite real evidence, and the local validator drops any proposal lacking ≥N distinct session ids.
+
+## Skill telemetry — find your dead skills
+
+Wire one `PostToolUse` hook and `ccblog` records every Skill invocation locally:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Skill",
+        "hooks": [{ "type": "command", "command": "ccblog telemetry-hook" }] }
+    ]
+  }
+}
+```
+
+Add to `~/.claude/settings.json`. The hook never blocks — telemetry failures are silently swallowed.
+
+```bash
+ccblog skills-report              # all-time usage table
+ccblog skills-report --since 30d  # last 30 days only
+```
+
+Output is a ranked Markdown table (skill, count, last used, projects). Extend with `knownSkills` (list of declared skills) and a "Dead skills" section appears for anything declared but never invoked. Tells you what to delete to lighten context.
+
+Storage: `~/.ccblog/telemetry/skills.jsonl` — append-only, one event per line, no PII (skill name + truncated args summary only).
 
 ## Privacy model — three trust zones
 

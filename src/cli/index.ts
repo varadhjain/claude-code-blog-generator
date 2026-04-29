@@ -280,6 +280,41 @@ async function runAnalysis(sessionPath: string, options: AnalysisOptions = {}): 
 }
 
 // ============================================================================
+// PROPOSAL REPORTERS — shared between propose-skills/memories/claude-md
+// ============================================================================
+
+interface ProposalLikeResult {
+  digest: { sessions: any[]; total_sessions: number };
+  proposals: any[];
+  written: string[];
+  dropped: any[];
+}
+
+function reportProposals(result: ProposalLikeResult, dryRun: boolean, label: string, installHint: string): void {
+  if (result.digest.sessions.length === 0) {
+    console.log('   No sessions found in window. (Did you run `ccblog index` recently?)');
+    return;
+  }
+  if (dryRun) {
+    console.error(`\n--- digest only (no LLM call) — ${result.digest.total_sessions} sessions ---`);
+    return;
+  }
+  if (result.proposals.length === 0) {
+    console.log(`   No ${label}-worthy patterns found across ${result.digest.total_sessions} sessions.`);
+    if (result.dropped.length > 0) {
+      console.log(`   (${result.dropped.length} weak proposal(s) dropped)`);
+    }
+    return;
+  }
+  console.log(`✅ ${result.proposals.length} ${label} proposal(s) written:`);
+  for (const p of result.written) console.log(`   ${p}`);
+  if (result.dropped.length > 0) {
+    console.log(`   (${result.dropped.length} weak proposal(s) dropped before write)`);
+  }
+  console.log(`\n   Review each file. To install: copy the section below the divider into the ${installHint}.`);
+}
+
+// ============================================================================
 // MAIN CLI
 // ============================================================================
 
@@ -411,6 +446,8 @@ async function main() {
       return (['gentle', 'honest', 'sharp'] as const).includes(v as any) ? v : 'honest';
     })() as 'gentle' | 'honest' | 'sharp';
     const dryRun = flags.includes('--dry-run');
+    const chat = flags.includes('--chat');
+    const noPrior = flags.includes('--no-prior');
 
     let sinceMs: number;
     try { sinceMs = parseSince(sinceFlag); }
@@ -425,7 +462,7 @@ async function main() {
     }
 
     console.log(`🪞 Reflecting on the last ${sinceFlag}${projectFlag ? ` (project: ${projectFlag})` : ''}…`);
-    const result = await runReflect({ sinceMs, project: projectFlag, tone: toneFlag, dryRun });
+    const result = await runReflect({ sinceMs, project: projectFlag, tone: toneFlag, dryRun, chat, noPrior });
 
     if (result.digest.sessions.length === 0) {
       console.log('   No sessions found in window. (Did you run `ccblog index` recently?)');
@@ -440,6 +477,100 @@ async function main() {
     console.log(`✅ Saved: ${result.artifactPath}`);
     console.log(`   ${result.digest.total_sessions} sessions analyzed, tone=${toneFlag}`);
     return;
+  }
+
+  if (subcommand === 'telemetry-hook') {
+    const { runTelemetryHook } = await import('../telemetry/hook');
+    await runTelemetryHook();
+    return;
+  }
+
+  if (subcommand === 'skills-report') {
+    const { runSkillsReport } = await import('../telemetry/report');
+    const { parseSince } = await import('../reflect');
+    const sinceFlag = (() => { const i = args.indexOf('--since'); return i >= 0 ? args[i + 1] : undefined; })();
+    const sinceMs = sinceFlag ? parseSince(sinceFlag) : undefined;
+    const result = runSkillsReport({ sinceMs });
+    process.stdout.write(result.stdout);
+    return;
+  }
+
+  if (subcommand === 'propose-skills' || subcommand === 'propose-memories' || subcommand === 'propose-claude-md' || subcommand === 'anti-patterns') {
+    const { parseSince } = await import('../reflect');
+    const sinceFlag = (() => { const i = args.indexOf('--since'); return i >= 0 ? args[i + 1] : '30d'; })();
+    const projectFlag = (() => { const i = args.indexOf('--project'); return i >= 0 ? args[i + 1] : undefined; })();
+    const workspaceMode = flags.includes('--workspace');  // ignore --project, hint LLM to look for cross-project patterns
+    const minSessionsFlag = (() => {
+      const i = args.indexOf('--min-sessions');
+      if (i < 0) return undefined;
+      const n = parseInt(args[i + 1], 10);
+      return Number.isFinite(n) && n >= 1 ? n : undefined;
+    })();
+    const dryRun = flags.includes('--dry-run');
+
+    let sinceMs: number;
+    try { sinceMs = parseSince(sinceFlag); }
+    catch (e) { console.error((e as Error).message); process.exit(1); }
+
+    if (!dryRun) {
+      const { ready } = await quickSetupCheck();
+      if (!ready) {
+        console.error(`❌ ${subcommand} needs an API key. Run: ccblog --setup`);
+        process.exit(1);
+      }
+    }
+
+    const effectiveProject = workspaceMode ? undefined : projectFlag;
+    const scopeLabel = workspaceMode ? '(workspace: all projects)' : projectFlag ? `(project: ${projectFlag})` : '';
+    const minLabel = minSessionsFlag ? ` (min-sessions: ${minSessionsFlag})` : '';
+    const baseOpts = { sinceMs, project: effectiveProject, dryRun, minCitationSessions: minSessionsFlag };
+
+    if (subcommand === 'propose-skills') {
+      const { runProposeSkills } = await import('../propose-skills');
+      console.log(`🛠️  Mining skill proposals from the last ${sinceFlag} ${scopeLabel}${minLabel}…`);
+      const result = await runProposeSkills(baseOpts);
+      reportProposals(result, dryRun, 'skill', 'skills dir');
+      return;
+    }
+    if (subcommand === 'propose-memories') {
+      const { runProposeMemories } = await import('../propose-memories');
+      console.log(`🧠 Mining memory proposals from the last ${sinceFlag} ${scopeLabel}${minLabel}…`);
+      const result = await runProposeMemories({ ...baseOpts, workspaceMode });
+      reportProposals(result, dryRun, 'memory', 'memory dir');
+      return;
+    }
+    if (subcommand === 'propose-claude-md') {
+      const { runProposeClaudeMd } = await import('../propose-claude-md');
+      console.log(`📝 Mining CLAUDE.md edit proposals from the last ${sinceFlag} ${scopeLabel}${minLabel}…`);
+      const result = await runProposeClaudeMd(baseOpts);
+      reportProposals(result, dryRun, 'CLAUDE.md rule', 'target CLAUDE.md');
+      return;
+    }
+    if (subcommand === 'anti-patterns') {
+      const { runAntiPatterns } = await import('../anti-patterns');
+      console.log(`⚠️  Mining anti-patterns from the last ${sinceFlag} ${scopeLabel}${minLabel}…`);
+      const result = await runAntiPatterns(baseOpts);
+      if (result.digest.sessions.length === 0) {
+        console.log('   No sessions found in window. (Did you run `ccblog index` recently?)');
+        return;
+      }
+      if (dryRun) {
+        console.error(`\n--- digest only (no LLM call) — ${result.digest.total_sessions} sessions ---`);
+        return;
+      }
+      if (!result.artifactPath) {
+        console.log(`   No anti-patterns found across ${result.digest.total_sessions} sessions.`);
+        if (result.dropped.length > 0) {
+          console.log(`   (${result.dropped.length} weak candidate(s) dropped)`);
+        }
+        return;
+      }
+      console.log(`✅ ${result.anti_patterns.length} anti-pattern(s) written: ${result.artifactPath}`);
+      if (result.dropped.length > 0) {
+        console.log(`   (${result.dropped.length} weak candidate(s) dropped)`);
+      }
+      return;
+    }
   }
 
   // Check for 'extract' subcommand
@@ -499,7 +630,16 @@ async function main() {
     console.log('  ccblog sessions     List the 20 most recent sessions');
     console.log('  ccblog extract      Extract learnings from latest session (or: ccblog extract <path>)');
     console.log('  ccblog reflect      Weekly retrospective: digest last 7 days + LLM review');
-    console.log('                       (--since 14d, --project name, --tone gentle|honest|sharp, --dry-run)');
+    console.log('                       (--since 14d, --project name, --tone gentle|honest|sharp,');
+    console.log('                        --chat for interactive REPL, --no-prior to skip comparison, --dry-run)');
+    console.log('  ccblog propose-skills      Mine N sessions for repeated workflows → draft skill proposals');
+    console.log('  ccblog propose-memories    Mine N sessions for durable memories worth saving');
+    console.log('  ccblog propose-claude-md   Mine N sessions for CLAUDE.md rule additions');
+    console.log('  ccblog anti-patterns       Surface manual toil / rediscovery / wrong-tool waste with fixes');
+    console.log('                             (shared flags: --since 30d, --project NAME, --workspace,');
+    console.log('                              --min-sessions 3, --dry-run)');
+    console.log('  ccblog skills-report       Show which Skills you actually use (requires telemetry hook)');
+    console.log('  ccblog telemetry-hook      PostToolUse hook target — wire into settings.json (see docs)');
     console.log('  ccblog review       Triage extracted learnings before they\'re eligible for sharing');
     console.log('  ccblog status       Show count of drafts pending review (--count for plain int)');
     console.log('  ccblog serve        Start MCP server (search + learnings, for other agents)\n');
