@@ -16,8 +16,12 @@ set -uo pipefail
 # to the default cron PATH (per CLAUDE.md launchd rule).
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-REPO_DIR="/Users/anekanta/Downloads/personal-software/blog-post-generator"
-INVESTING_ENV="/Users/anekanta/Downloads/personal-software/investing/.env"
+# Workspace root (W12): PSW_ROOT env override, else derived from this script's
+# location (scripts/ is one level under the repo, repo is one level under root).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PSW_ROOT="${PSW_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+REPO_DIR="$PSW_ROOT/blog-post-generator"
+INVESTING_ENV="$PSW_ROOT/investing/.env"
 CCBLOG_ROOT="$HOME/.ccblog"
 LOG_DIR="$HOME/.ccblog/weekly-batch-logs"
 mkdir -p "$LOG_DIR"
