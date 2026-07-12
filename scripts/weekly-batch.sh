@@ -122,8 +122,11 @@ EMAIL_FILE="$(mktemp)"
 SUBJECT="ccblog weekly batch — $DATE_STAMP — ${#NEW_FILES[@]} proposal(s)"
 
 # Use python to JSON-escape the body — avoids shell-quoting hell for multi-line content.
-JSON_PAYLOAD="$(python3 -c '
-import json, os, sys
+# NB: env-assignments must come BEFORE `python3` — placing `EMAIL_FILE=... SUBJECT=...`
+# after `-c '...'` passes them as sys.argv, NOT os.environ, so os.environ[...] raised
+# KeyError → empty payload → Resend 400 "Request body must be valid JSON".
+JSON_PAYLOAD="$(EMAIL_FILE="$EMAIL_FILE" SUBJECT="$SUBJECT" python3 -c '
+import json, os
 with open(os.environ["EMAIL_FILE"]) as f:
     body = f.read()
 print(json.dumps({
@@ -132,7 +135,7 @@ print(json.dumps({
     "subject": os.environ["SUBJECT"],
     "text": body,
 }))
-' EMAIL_FILE="$EMAIL_FILE" SUBJECT="$SUBJECT")"
+')"
 
 HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "https://api.resend.com/emails" \
   -H "Authorization: Bearer $RESEND_API_KEY" \
