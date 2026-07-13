@@ -60,6 +60,10 @@ run_step() {
   fi
 }
 
+# Build/refresh the local session search index FIRST — the reflect/propose-X
+# miners read from it, and a stale/empty index is why the digest kept coming
+# back "No sessions found in window." (index takes no args; scans the sessions root.)
+run_step "index"            npx ts-node src/cli/index.ts index
 run_step "reflect"          npx ts-node src/cli/index.ts reflect --since 7d --tone honest
 run_step "propose-skills"   npx ts-node src/cli/index.ts propose-skills --since 7d
 run_step "propose-memories" npx ts-node src/cli/index.ts propose-memories --since 7d
