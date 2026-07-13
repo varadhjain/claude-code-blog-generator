@@ -14,7 +14,15 @@ set -uo pipefail
 
 # Hard-pin tool paths — launchd's PATH is minimal and Homebrew node is invisible
 # to the default cron PATH (per CLAUDE.md launchd rule).
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+#
+# PIN Node 24 (keg-only) FIRST on PATH: the search index uses better-sqlite3, a
+# native module. The system `node` is v26 (ABI 147), but better-sqlite3@11.10.0
+# has no node-26 prebuilt and its bundled node-gyp can't build for node 26 — the
+# module fails to load, so `ccblog index` produced zero sessions ("No sessions
+# found in window"). Node 24 (ABI 137) builds cleanly; better-sqlite3 is compiled
+# against it. If you upgrade better-sqlite3 to a node-26-compatible release, drop
+# this keg prefix. Keg installed via `brew install node@24`.
+export PATH="/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Workspace root (W12): PSW_ROOT env override, else derived from this script's
 # location (scripts/ is one level under the repo, repo is one level under root).
