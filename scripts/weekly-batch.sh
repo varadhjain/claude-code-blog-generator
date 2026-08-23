@@ -2,7 +2,7 @@
 #
 # ccblog weekly compound-engineering batch.
 # Runs reflect + four propose-X commands against the last 7 days, counts new
-# files written under ~/.ccblog/, and emails a digest via Resend.
+# files written under ~/.ccblog/, and emails a digest via local mail-service.
 #
 # Triggered by ~/Library/LaunchAgents/com.varadh.ccblog-weekly-batch.plist
 # (Sunday 9pm America/New_York). Run manually via:
@@ -22,13 +22,13 @@ set -uo pipefail
 # found in window"). Node 24 (ABI 137) builds cleanly; better-sqlite3 is compiled
 # against it. If you upgrade better-sqlite3 to a node-26-compatible release, drop
 # this keg prefix. Keg installed via `brew install node@24`.
-export PATH="/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="${CCBLOG_TEST_PATH_PREFIX:+$CCBLOG_TEST_PATH_PREFIX:}/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Workspace root (W12): PSW_ROOT env override, else derived from this script's
 # location (scripts/ is one level under the repo, repo is one level under root).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PSW_ROOT="${PSW_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-REPO_DIR="$PSW_ROOT/blog-post-generator"
+REPO_DIR="${CCBLOG_REPO_DIR:-$PSW_ROOT/blog-post-generator}"
 INVESTING_ENV="$PSW_ROOT/investing/.env"
 CCBLOG_ROOT="$HOME/.ccblog"
 LOG_DIR="$HOME/.ccblog/weekly-batch-logs"
@@ -37,14 +37,33 @@ DATE_STAMP="$(date +%Y-%m-%d)"
 RUN_LOG="$LOG_DIR/${DATE_STAMP}.log"
 MARKER="$LOG_DIR/.last-run.marker"
 
-# Resend creds live in investing/.env (per workspace convention).
-if [ -f "$INVESTING_ENV" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$INVESTING_ENV"
-  set +a
+# Read only the gateway token. Do not source the whole investing environment
+# into this process; provider credentials remain inside mail-service.
+if [ ! -f "$INVESTING_ENV" ]; then
+  echo "MAIL_SERVICE_TOKEN unavailable — missing $INVESTING_ENV" >&2
+  exit 1
 fi
-: "${RESEND_API_KEY:?RESEND_API_KEY not set — check $INVESTING_ENV}"
+MAIL_SERVICE_TOKEN="$(python3 - "$INVESTING_ENV" <<'PY'
+import sys
+
+value = ""
+with open(sys.argv[1], encoding="utf-8") as env_file:
+    for raw_line in env_file:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, candidate = line.split("=", 1)
+        if key.strip() == "MAIL_SERVICE_TOKEN":
+            value = candidate.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+print(value)
+PY
+)"
+if [ -z "$MAIL_SERVICE_TOKEN" ]; then
+  echo "MAIL_SERVICE_TOKEN unavailable — check $INVESTING_ENV" >&2
+  exit 1
+fi
 
 cd "$REPO_DIR"
 
@@ -129,30 +148,37 @@ EMAIL_FILE="$(mktemp)"
   echo "Run log: $RUN_LOG"
 } > "$EMAIL_FILE"
 
-# Resend send. Plain text email — Resend accepts text/plain via the `text` field.
-# Email subject reflects whether anything was found, so the inbox preview is honest.
+# Send through mail-service. Subject reflects whether anything was found, so
+# the inbox preview is honest.
 SUBJECT="ccblog weekly batch — $DATE_STAMP — ${#NEW_FILES[@]} proposal(s)"
 
-# Use python to JSON-escape the body — avoids shell-quoting hell for multi-line content.
+# Use python to JSON-escape the body and produce a minimal safe HTML companion.
 # NB: env-assignments must come BEFORE `python3` — placing `EMAIL_FILE=... SUBJECT=...`
 # after `-c '...'` passes them as sys.argv, NOT os.environ, so os.environ[...] raised
-# KeyError → empty payload → Resend 400 "Request body must be valid JSON".
+# KeyError → empty payload → gateway 400 "Request body must be valid JSON".
 JSON_PAYLOAD="$(EMAIL_FILE="$EMAIL_FILE" SUBJECT="$SUBJECT" python3 -c '
 import json, os
+import html
 with open(os.environ["EMAIL_FILE"]) as f:
     body = f.read()
 print(json.dumps({
-    "from": "claude@updates.varadhja.in",
+    "from": "CCBlog <ccblog@updates.varadhja.in>",
     "to": ["varadhjain@gmail.com"],
     "subject": os.environ["SUBJECT"],
-    "text": body,
+    "plain": body,
+    "html": "<pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" + html.escape(body) + "</pre>",
+    "source": "ccblog-weekly-batch",
 }))
 ')"
 
-HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "https://api.resend.com/emails" \
-  -H "Authorization: Bearer $RESEND_API_KEY" \
+if ! HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "http://127.0.0.1:9100/send" \
+  -H "Authorization: Bearer $MAIL_SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "$JSON_PAYLOAD")"
+  -d "$JSON_PAYLOAD")"; then
+  echo "mail-service unavailable" | tee -a "$RUN_LOG" >&2
+  rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
+  exit 1
+fi
 
 HTTP_CODE="$(echo "$HTTP_RESPONSE" | tail -1)"
 HTTP_BODY="$(echo "$HTTP_RESPONSE" | sed '$d')"
@@ -161,6 +187,12 @@ echo "" | tee -a "$RUN_LOG"
 echo "---- email send ----" | tee -a "$RUN_LOG"
 echo "HTTP $HTTP_CODE" | tee -a "$RUN_LOG"
 echo "$HTTP_BODY" | tee -a "$RUN_LOG"
+
+if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+  echo "mail-service rejected the digest" | tee -a "$RUN_LOG" >&2
+  rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
+  exit 1
+fi
 
 rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
 touch "$PREV_MARKER"
