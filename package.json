@@ -52,7 +52,7 @@
     "@anthropic-ai/sdk": "^0.88.0",
     "@inquirer/prompts": "^7.9.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.3",
     "handlebars": "^4.7.8",
