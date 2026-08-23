@@ -230,6 +230,35 @@ export function getInlineStyles(): string {
         line-height: 1.5;
       }
 
+      /* Phase card animation */
+      @keyframes phaseSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .phase-card {
+        animation: phaseSlideIn 350ms cubic-bezier(0.23, 1, 0.32, 1) both;
+      }
+
+      .phases > .phase-card:nth-child(1) { animation-delay: 0ms; }
+      .phases > .phase-card:nth-child(2) { animation-delay: 60ms; }
+      .phases > .phase-card:nth-child(3) { animation-delay: 120ms; }
+      .phases > .phase-card:nth-child(4) { animation-delay: 180ms; }
+      .phases > .phase-card:nth-child(n+5) { animation-delay: 240ms; }
+
+      /* Accessibility: respect prefers-reduced-motion */
+      @media (prefers-reduced-motion: reduce) {
+        .phase-card {
+          animation: none;
+        }
+      }
+
       /* Messages */
       .message {
         margin-bottom: 1.5rem;
