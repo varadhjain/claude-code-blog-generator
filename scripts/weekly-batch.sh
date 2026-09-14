@@ -37,31 +37,48 @@ DATE_STAMP="$(date +%Y-%m-%d)"
 RUN_LOG="$LOG_DIR/${DATE_STAMP}.log"
 MARKER="$LOG_DIR/.last-run.marker"
 
-# Read only the gateway token. Do not source the whole investing environment
-# into this process; provider credentials remain inside mail-service.
-if [ ! -f "$INVESTING_ENV" ]; then
-  echo "MAIL_SERVICE_TOKEN unavailable — missing $INVESTING_ENV" >&2
-  exit 1
-fi
-MAIL_SERVICE_TOKEN="$(python3 - "$INVESTING_ENV" <<'PY'
+# Read the gateway token + URL. Prefer the real environment (set on this Mac
+# via ~/.config/firm-stack/secrets.env or launchd's EnvironmentVariables) and
+# only parse the investing .env file as a fallback. Do not source the whole
+# investing environment into this process; provider credentials remain inside
+# mail-service.
+MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-}"
+if [ -z "${MAIL_SERVICE_TOKEN:-}" ] || [ -z "$MAIL_SERVICE_URL" ]; then
+  if [ ! -f "$INVESTING_ENV" ]; then
+    if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
+      echo "MAIL_SERVICE_TOKEN unavailable — missing $INVESTING_ENV" >&2
+      exit 1
+    fi
+  else
+    FILE_VARS="$(python3 - "$INVESTING_ENV" <<'PY'
 import sys
 
-value = ""
+wanted = ("MAIL_SERVICE_TOKEN", "MAIL_SERVICE_URL")
+values = {}
 with open(sys.argv[1], encoding="utf-8") as env_file:
     for raw_line in env_file:
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, candidate = line.split("=", 1)
-        if key.strip() == "MAIL_SERVICE_TOKEN":
+        key = key.strip()
+        if key in wanted:
             value = candidate.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
-print(value)
+            values[key] = value
+for key in wanted:
+    print(f"{key}={values.get(key, '')}")
 PY
 )"
-if [ -z "$MAIL_SERVICE_TOKEN" ]; then
-  echo "MAIL_SERVICE_TOKEN unavailable — check $INVESTING_ENV" >&2
+    eval "$(echo "$FILE_VARS" | sed 's/^/FILE_/')"
+    MAIL_SERVICE_TOKEN="${MAIL_SERVICE_TOKEN:-$FILE_MAIL_SERVICE_TOKEN}"
+    MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-$FILE_MAIL_SERVICE_URL}"
+  fi
+fi
+MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-http://127.0.0.1:9100}"
+if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
+  echo "MAIL_SERVICE_TOKEN unavailable — check environment or $INVESTING_ENV" >&2
   exit 1
 fi
 
@@ -171,7 +188,7 @@ print(json.dumps({
 }))
 ')"
 
-if ! HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "http://127.0.0.1:9100/send" \
+if ! HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "${MAIL_SERVICE_URL%/}/send" \
   -H "Authorization: Bearer $MAIL_SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d "$JSON_PAYLOAD")"; then
