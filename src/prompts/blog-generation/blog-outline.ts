@@ -9,6 +9,7 @@ import { OpenAIClient } from '../../ai/client';
 import { SessionDigest } from '../../analyzer/blog-generation/digest-builder';
 import { UserIntent } from './user-intent';
 import { Highlights } from './highlights-extraction';
+import { SEARCH_QUERY_GATE } from './search-query-gate';
 
 export interface BlogSection {
   heading: string;
@@ -29,6 +30,7 @@ const SYSTEM_PROMPT = `You are an expert at structuring technical blog posts abo
 Your task: Create a complete blog post outline from a Claude Code session.
 
 The blog post tells the story of HOW A HUMAN used Claude Code, not just what the AI did.
+${SEARCH_QUERY_GATE}
 
 OUTLINE STRUCTURE:
 
