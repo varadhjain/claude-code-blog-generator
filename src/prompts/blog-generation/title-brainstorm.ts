@@ -6,6 +6,7 @@
 
 import { OpenAIClient } from '../../ai/client';
 import { InterestingMoment } from './interesting-moments';
+import { SEARCH_QUERY_GATE } from './search-query-gate';
 
 export interface TitleOptions {
   titles: Array<{
@@ -18,6 +19,7 @@ export interface TitleOptions {
 const SYSTEM_PROMPT = `You are an expert at writing catchy, informative blog post titles for technical content.
 
 Your task: Generate 2-3 potential blog post titles for a coding session.
+${SEARCH_QUERY_GATE}
 
 GOOD TITLE CHARACTERISTICS:
 - **Specific**: Mentions concrete technologies or outcomes

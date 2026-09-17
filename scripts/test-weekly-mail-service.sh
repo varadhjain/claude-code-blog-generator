@@ -72,7 +72,17 @@ if run_batch unavailable; then
   exit 1
 fi
 
+# Shell syntax in a dotenv token must stay literal, never execute.
+printf 'MAIL_SERVICE_TOKEN=$(touch %s)\n' "$TEST_ROOT/executed" > "$TEST_ROOT/workspace/investing/.env"
+run_batch success
+[ ! -e "$TEST_ROOT/executed" ] || { echo "dotenv executed shell code" >&2; exit 1; }
+grep -Fq 'Authorization: Bearer $(touch ' "$TEST_ROOT/curl.args"
+
+# Explicit process configuration works without a dotenv file.
 rm "$TEST_ROOT/workspace/investing/.env"
+MAIL_SERVICE_TOKEN=environment-token MAIL_SERVICE_URL=http://127.0.0.1:9100 run_batch success
+grep -q '^Authorization: Bearer environment-token$' "$TEST_ROOT/curl.args"
+
 if run_batch success; then
   echo "expected missing token source to fail" >&2
   exit 1
