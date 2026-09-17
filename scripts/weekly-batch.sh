@@ -42,40 +42,30 @@ MARKER="$LOG_DIR/.last-run.marker"
 # only parse the investing .env file as a fallback. Do not source the whole
 # investing environment into this process; provider credentials remain inside
 # mail-service.
-MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-}"
-if [ -z "${MAIL_SERVICE_TOKEN:-}" ] || [ -z "$MAIL_SERVICE_URL" ]; then
-  if [ ! -f "$INVESTING_ENV" ]; then
-    if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
-      echo "MAIL_SERVICE_TOKEN unavailable — missing $INVESTING_ENV" >&2
-      exit 1
-    fi
-  else
-    FILE_VARS="$(python3 - "$INVESTING_ENV" <<'PY'
+read_gateway_value() {
+  python3 - "$INVESTING_ENV" "$1" <<'PYENV'
 import sys
+from pathlib import Path
 
-wanted = ("MAIL_SERVICE_TOKEN", "MAIL_SERVICE_URL")
-values = {}
-with open(sys.argv[1], encoding="utf-8") as env_file:
-    for raw_line in env_file:
+value = ""
+path = Path(sys.argv[1])
+if path.is_file():
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, candidate = line.split("=", 1)
-        key = key.strip()
-        if key in wanted:
+        if key.strip() == sys.argv[2]:
             value = candidate.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
-            values[key] = value
-for key in wanted:
-    print(f"{key}={values.get(key, '')}")
-PY
-)"
-    eval "$(echo "$FILE_VARS" | sed 's/^/FILE_/')"
-    MAIL_SERVICE_TOKEN="${MAIL_SERVICE_TOKEN:-$FILE_MAIL_SERVICE_TOKEN}"
-    MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-$FILE_MAIL_SERVICE_URL}"
-  fi
-fi
+if "\n" in value or "\r" in value:
+    raise SystemExit("Invalid gateway value")
+print(value)
+PYENV
+}
+MAIL_SERVICE_TOKEN="${MAIL_SERVICE_TOKEN:-$(read_gateway_value MAIL_SERVICE_TOKEN)}"
+MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-$(read_gateway_value MAIL_SERVICE_URL)}"
 MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-http://127.0.0.1:9100}"
 if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
   echo "MAIL_SERVICE_TOKEN unavailable — check environment or $INVESTING_ENV" >&2
