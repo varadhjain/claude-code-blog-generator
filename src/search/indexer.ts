@@ -218,6 +218,28 @@ function parseCodexLine(line: string, msgIndex: number): ParsedMsg | null {
   const cwd = typeof obj.cwd === 'string' ? obj.cwd
     : (typeof obj?.turn_context?.cwd === 'string' ? obj.turn_context.cwd : null);
 
+  // Rollout logs carry canonical messages in response_item; event_msg repeats
+  // the same text, so indexing both would duplicate captures. Never index
+  // system/developer context, analysis, compaction summaries or tool outputs.
+  if (obj.type === 'response_item') {
+    const message = obj.payload;
+    if (!message || message.type !== 'message') return null;
+    const role = message.role;
+    if (role !== 'user' && role !== 'assistant') return null;
+    if (role === 'assistant' && message.channel &&
+        message.channel !== 'final' && message.channel !== 'commentary') return null;
+    const text = Array.isArray(message.content) ? message.content
+      .filter((block: any) => block && ['input_text', 'output_text', 'text'].includes(block.type) && typeof block.text === 'string')
+      .map((block: any) => block.text).join('\n') : '';
+    if (!text.trim()) return null;
+    return {
+      msgIndex, ts: safeTs, cwd,
+      userText: role === 'user' ? text : '',
+      assistantText: role === 'assistant' ? text : '',
+      toolCalls: '', filePaths: [], isHumanPrompt: role === 'user',
+    };
+  }
+
   const eventType: string = obj.type || obj.event || '';
   const role: string | undefined = obj.role || obj?.payload?.role;
   const text: string = obj.text || obj.content || obj?.payload?.text || obj?.payload?.message || '';
@@ -326,7 +348,46 @@ const getCurrentMsgCount = (db: Database) => db.prepare<[string]>(
   'SELECT msg_count FROM sessions WHERE session_id = ?'
 );
 
+// Mind is a separate private domain. Exclude its session transcripts from
+// this derived index and the automatic reflection/proposal consumers.
+function sessionScope(filePath: string): { cwd: string | null; privateMind: boolean } {
+  const fd = openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(CHUNK_BYTES);
+    const count = readSync(fd, buffer, 0, buffer.length, 0);
+    let cwd: string | null = null;
+    for (const line of buffer.subarray(0, count).toString('utf8').split('\n')) {
+      try {
+        const obj = JSON.parse(line);
+        const candidate = obj.cwd ??
+          ((obj.type === 'session_meta' || obj.type === 'turn_context') ? obj.payload?.cwd : null);
+        if (typeof candidate !== 'string') continue;
+        cwd ??= candidate;
+        if (/(?:^|\/)(?:mind|\.mind)(?:\/|$)/i.test(candidate))
+          return { cwd, privateMind: true };
+      } catch { /* incomplete final line or unrelated record */ }
+    }
+    const projectDir = basename(dirname(filePath));
+    return { cwd, privateMind: /(?:^|-)(?:mind|\.mind)(?:-|$)/i.test(projectDir) };
+  } finally { closeSync(fd); }
+}
+
+function forgetDerivedSession(db: Database, filePath: string): void {
+  const sessionId = sessionIdFromPath(filePath);
+  db.transaction(() => {
+    db.prepare('DELETE FROM messages_fts WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM session_files WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM ingest_cursor WHERE file_path = ?').run(filePath);
+  })();
+}
+
 export function indexFile(db: Database, filePath: string, source: Source = 'claude-code'): { messagesIndexed: number; bytesIngested: number } {
+  const scope = sessionScope(filePath);
+  if (scope.privateMind || (source === 'codex' && !scope.cwd)) {
+    forgetDerivedSession(db, filePath);
+    return { messagesIndexed: 0, bytesIngested: 0 };
+  }
   const st = statSync(filePath);
   const cursor = getCursor(db).get(filePath) as { byte_offset: number; mtime_ms: number } | undefined;
   const startOffset = cursor?.byte_offset ?? 0;
@@ -351,7 +412,7 @@ export function indexFile(db: Database, filePath: string, source: Source = 'clau
   let firstPrompt: string | null = null;
   let startedAt: number | null = null;
   let lastMsgAt: number | null = null;
-  let sessionCwd: string | null = null;
+  let sessionCwd: string | null = scope.cwd;
   const fileSet = new Set<string>();
 
   const txn = db.transaction((lines: string[]) => {

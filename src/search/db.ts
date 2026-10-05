@@ -89,6 +89,17 @@ function initSchema(db: Database.Database) {
     );
   `);
 
+  const codexReader = db.prepare("SELECT value FROM schema_meta WHERE key = 'codex_reader'").get() as { value: string } | undefined;
+  if (codexReader?.value !== 'rollout-v1') {
+    db.transaction(() => {
+      db.exec(`DELETE FROM messages_fts WHERE session_id IN (SELECT session_id FROM sessions WHERE source = 'codex');
+        DELETE FROM session_files WHERE session_id IN (SELECT session_id FROM sessions WHERE source = 'codex');
+        DELETE FROM ingest_cursor WHERE file_path IN (SELECT file_path FROM sessions WHERE source = 'codex');
+        DELETE FROM sessions WHERE source = 'codex';`);
+      db.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('codex_reader', 'rollout-v1')").run();
+    })();
+  }
+
   db.prepare(`INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('version', ?)`).run(String(SCHEMA_VERSION));
 }
 

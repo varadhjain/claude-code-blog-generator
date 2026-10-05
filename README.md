@@ -78,6 +78,8 @@ ccblog sessions                        # 20 most recent sessions
 
 **Codex CLI support.** Sessions from OpenAI's Codex CLI (`~/.codex/sessions/YYYY/MM/DD/*.jsonl`) are indexed alongside Claude Code sessions. Each result has a `source: 'claude-code' | 'codex'` field. The indexer auto-detects both — no flag required.
 
+Current Codex rollout messages retain their timestamps without duplicate event echoes. System/developer context, analysis and tool outputs are excluded. Mind transcripts and Codex sessions without a known workspace are excluded from indexing and automatic proposals. Updating the reader rebuilds only derived Codex rows; original logs and Claude rows are retained.
+
 **Tuning:** four BM25 field weights in `src/search/weights.ts` control ranking (user text, assistant text, tool calls, file paths). No reindex needed after changes.
 
 ## Reflect — weekly retrospective
