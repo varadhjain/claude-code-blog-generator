@@ -2,6 +2,9 @@
 
 All notable changes to this project. One line per release.
 
+## 2026-10-05
+- Weekly digest uses the local mail-service and its bare-address sender contract, reads only the bearer token without shell evaluation, and counts files from the actual run start with a macOS-compatible marker; live scheduled execution still needs its Downloads permission restored.
+
 ## v5 — 2026-04-26
 - `ccblog reflect` — weekly retrospective from BM25 index, every claim cites `[sid:msg#]`, three tones, saves to `~/.ccblog/reflections/` with `share_status: private`.
 

@@ -37,23 +37,23 @@ DATE_STAMP="$(date +%Y-%m-%d)"
 RUN_LOG="$LOG_DIR/${DATE_STAMP}.log"
 MARKER="$LOG_DIR/.last-run.marker"
 
-# Read the gateway token + URL. Prefer the real environment (set on this Mac
+# Read the gateway token. Prefer the real environment (set on this Mac
 # via ~/.config/firm-stack/secrets.env or launchd's EnvironmentVariables) and
 # only parse the investing .env file as a fallback. Do not source the whole
 # investing environment into this process; provider credentials remain inside
 # mail-service.
-MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-}"
-if [ -z "${MAIL_SERVICE_TOKEN:-}" ] || [ -z "$MAIL_SERVICE_URL" ]; then
+MAIL_SERVICE_URL="http://127.0.0.1:9100"
+if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
   if [ ! -f "$INVESTING_ENV" ]; then
     if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
       echo "MAIL_SERVICE_TOKEN unavailable — missing $INVESTING_ENV" >&2
       exit 1
     fi
   else
-    FILE_VARS="$(python3 - "$INVESTING_ENV" <<'PY'
+    FILE_MAIL_SERVICE_TOKEN="$(python3 - "$INVESTING_ENV" <<'PY'
 import sys
 
-wanted = ("MAIL_SERVICE_TOKEN", "MAIL_SERVICE_URL")
+wanted = ("MAIL_SERVICE_TOKEN",)
 values = {}
 with open(sys.argv[1], encoding="utf-8") as env_file:
     for raw_line in env_file:
@@ -67,16 +67,12 @@ with open(sys.argv[1], encoding="utf-8") as env_file:
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
             values[key] = value
-for key in wanted:
-    print(f"{key}={values.get(key, '')}")
+print(values.get("MAIL_SERVICE_TOKEN", ""))
 PY
 )"
-    eval "$(echo "$FILE_VARS" | sed 's/^/FILE_/')"
     MAIL_SERVICE_TOKEN="${MAIL_SERVICE_TOKEN:-$FILE_MAIL_SERVICE_TOKEN}"
-    MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-$FILE_MAIL_SERVICE_URL}"
   fi
 fi
-MAIL_SERVICE_URL="${MAIL_SERVICE_URL:-http://127.0.0.1:9100}"
 if [ -z "${MAIL_SERVICE_TOKEN:-}" ]; then
   echo "MAIL_SERVICE_TOKEN unavailable — check environment or $INVESTING_ENV" >&2
   exit 1
@@ -87,7 +83,7 @@ cd "$REPO_DIR"
 # Snapshot mtime BEFORE running so we can diff "what's new this run".
 PREV_MARKER="$MARKER"
 NEW_MARKER_FILE="$(mktemp)"
-touch -d "1 hour ago" "$NEW_MARKER_FILE"  # "new" = changed in this run window
+# mktemp's creation time marks the actual beginning of this run on macOS.
 
 echo "==== ccblog weekly batch — $(date) ====" | tee -a "$RUN_LOG"
 
@@ -179,7 +175,7 @@ import html
 with open(os.environ["EMAIL_FILE"]) as f:
     body = f.read()
 print(json.dumps({
-    "from": "CCBlog <ccblog@updates.varadhja.in>",
+    "from": "ccblog@updates.varadhja.in",
     "to": ["varadhjain@gmail.com"],
     "subject": os.environ["SUBJECT"],
     "plain": body,

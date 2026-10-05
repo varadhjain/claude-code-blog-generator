@@ -9,6 +9,7 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 mkdir -p "$TEST_ROOT/bin" "$TEST_ROOT/home/.ccblog/reflections" "$TEST_ROOT/workspace/investing"
 cat > "$TEST_ROOT/workspace/investing/.env" <<'EOF'
 MAIL_SERVICE_TOKEN=test-token
+MAIL_SERVICE_URL=https://obsolete.invalid
 UNRELATED_SECRET=must-not-be-loaded
 EOF
 
@@ -53,7 +54,7 @@ import sys
 
 with open(sys.argv[1], encoding="utf-8") as payload_file:
     payload = json.load(payload_file)
-assert payload["from"] == "CCBlog <ccblog@updates.varadhja.in>"
+assert payload["from"] == "ccblog@updates.varadhja.in"
 assert payload["to"] == ["varadhjain@gmail.com"]
 assert payload["plain"]
 assert payload["html"]
