@@ -41,6 +41,10 @@ try {
  writeFileSync(legacyPrivate,meta('/projects/firm')+JSON.stringify({timestamp,type:'user_input',turn_context:{cwd:'/private/.mind'},text:'LEGACY_PRIVATE'})+'\n');
  assert.equal(indexFile(db,legacyPrivate,'codex').messagesIndexed,0);
  assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('LEGACY_PRIVATE'));
+ const sharedMind=join(root,'shared-mind.jsonl');
+ writeFileSync(sharedMind,meta('/projects/personal-software')+msg('user','Fix the Mind app private journal capture.')+msg('assistant','Private capture text must stay separate.'));
+ assert.equal(indexFile(db,sharedMind,'codex').messagesIndexed,0);
+ assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('Private capture text'));
  const unknown=join(root,'unknown.jsonl');writeFileSync(unknown,msg('user','UNKNOWN_SCOPE'));
  assert.equal(indexFile(db,unknown,'codex').messagesIndexed,0);
  const claude=join(root,'claude.jsonl');

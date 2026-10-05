@@ -351,7 +351,7 @@ const getCurrentMsgCount = (db: Database) => db.prepare<[string]>(
 
 // Mind is a separate private domain. Exclude its session transcripts from
 // this derived index and the automatic reflection/proposal consumers.
-function sessionScope(filePath: string, endOffset: number): { cwd: string | null; privateMind: boolean } {
+function sessionScope(filePath: string, endOffset: number, source: Source): { cwd: string | null; privateMind: boolean } {
   const fd = openSync(filePath, 'r');
   try {
     const buffer = Buffer.alloc(CHUNK_BYTES);
@@ -367,9 +367,15 @@ function sessionScope(filePath: string, endOffset: number): { cwd: string | null
       let boundary: number;
       while ((boundary=pending.indexOf('\n')) >= 0) {
         const line=pending.slice(0,boundary); pending=pending.slice(boundary+1);
-        if (!line.includes('"cwd"')) continue;
         try {
           const obj = JSON.parse(line);
+          // Some Mind chats run from the shared workspace. Exclude explicit
+          // Mind-domain conversations too, without inspecting system/context
+          // or raw tool-output text. Ambiguous mentions are held out.
+          const message = source === 'codex' ? parseCodexLine(line, 0) : parseLine(line, 0);
+          const conversation = message ? message.userText + '\n' + message.assistantText : '';
+          if (/\bMind\b/.test(conversation) || /\bprivate journal\b|\bmind (?:app|journal|bot|game)\b|\/\.mind(?:\/|\b)/i.test(conversation))
+            return { cwd, privateMind: true };
           const candidate = obj.cwd ?? obj.turn_context?.cwd ??
             ((obj.type === 'session_meta' || obj.type === 'turn_context') ? obj.payload?.cwd : null);
           if (typeof candidate !== 'string') continue;
@@ -396,7 +402,7 @@ function forgetDerivedSession(db: Database, filePath: string): void {
 
 export function indexFile(db: Database, filePath: string, source: Source = 'claude-code'): { messagesIndexed: number; bytesIngested: number } {
   const st = statSync(filePath);
-  const scope = sessionScope(filePath, st.size);
+  const scope = sessionScope(filePath, st.size, source);
   if (scope.privateMind || (source === 'codex' && !scope.cwd)) {
     forgetDerivedSession(db, filePath);
     return { messagesIndexed: 0, bytesIngested: 0 };
