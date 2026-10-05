@@ -370,7 +370,7 @@ function sessionScope(filePath: string, endOffset: number): { cwd: string | null
         if (!line.includes('"cwd"')) continue;
         try {
           const obj = JSON.parse(line);
-          const candidate = obj.cwd ??
+          const candidate = obj.cwd ?? obj.turn_context?.cwd ??
             ((obj.type === 'session_meta' || obj.type === 'turn_context') ? obj.payload?.cwd : null);
           if (typeof candidate !== 'string') continue;
           cwd ??= candidate;

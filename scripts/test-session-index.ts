@@ -37,6 +37,10 @@ try {
  assert.equal(indexFile(db,transition,'codex').messagesIndexed,0);
  assert.equal((db.prepare("SELECT count(*) AS n FROM sessions WHERE session_id='transition'").get() as any).n,0);
  assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('LATE_PRIVATE_SENTINEL'));
+ const legacyPrivate=join(root,'legacy-private.jsonl');
+ writeFileSync(legacyPrivate,meta('/projects/firm')+JSON.stringify({timestamp,type:'user_input',turn_context:{cwd:'/private/.mind'},text:'LEGACY_PRIVATE'})+'\n');
+ assert.equal(indexFile(db,legacyPrivate,'codex').messagesIndexed,0);
+ assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('LEGACY_PRIVATE'));
  const unknown=join(root,'unknown.jsonl');writeFileSync(unknown,msg('user','UNKNOWN_SCOPE'));
  assert.equal(indexFile(db,unknown,'codex').messagesIndexed,0);
  const claude=join(root,'claude.jsonl');
