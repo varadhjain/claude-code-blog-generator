@@ -30,6 +30,13 @@ try {
  writeFileSync(mind,meta('/projects/personal-software/mind')+msg('user','PRIVATE_JOURNAL'));
  assert.equal(indexFile(db,mind,'codex').messagesIndexed,0);
  assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('PRIVATE_JOURNAL'));
+ const transition=join(root,'transition.jsonl');
+ writeFileSync(transition,meta('/projects/firm')+msg('user','Existing nonprivate work should be removed on private transition.'));
+ assert.equal(indexFile(db,transition,'codex').messagesIndexed,1);
+ appendFileSync(transition,record('event_msg',{type:'irrelevant',text:'x'.repeat(2*1024*1024)})+record('turn_context',{cwd:'/projects/personal-software/mind'})+msg('user','LATE_PRIVATE_SENTINEL'));
+ assert.equal(indexFile(db,transition,'codex').messagesIndexed,0);
+ assert.equal((db.prepare("SELECT count(*) AS n FROM sessions WHERE session_id='transition'").get() as any).n,0);
+ assert(!JSON.stringify(db.prepare('SELECT * FROM messages_fts').all()).includes('LATE_PRIVATE_SENTINEL'));
  const unknown=join(root,'unknown.jsonl');writeFileSync(unknown,msg('user','UNKNOWN_SCOPE'));
  assert.equal(indexFile(db,unknown,'codex').messagesIndexed,0);
  const claude=join(root,'claude.jsonl');

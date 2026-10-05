@@ -1,6 +1,7 @@
 import { openSync, readSync, closeSync, statSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { StringDecoder } from 'node:string_decoder';
 import type { Database } from 'better-sqlite3';
 
 export type Source = 'claude-code' | 'codex';
@@ -80,13 +81,13 @@ export function walkAll(): SessionSource[] {
  * Returns the safe chunk + the new offset (which lands on the byte AFTER the last \n).
  * Partial trailing lines are left for the next pass.
  */
-function readSafeChunk(filePath: string, startOffset: number): { text: string; newOffset: number } {
+function readSafeChunk(filePath: string, startOffset: number, endOffset: number): { text: string; newOffset: number } {
   const st = statSync(filePath);
-  if (st.size <= startOffset) return { text: '', newOffset: startOffset };
+  if (Math.min(st.size, endOffset) <= startOffset) return { text: '', newOffset: startOffset };
 
   const fd = openSync(filePath, 'r');
   try {
-    const toRead = st.size - startOffset;
+    const toRead = Math.min(st.size, endOffset) - startOffset;
     const buf = Buffer.alloc(Math.min(toRead, CHUNK_BYTES * 64)); // cap one pass at 64 MiB
     const n = readSync(fd, buf, 0, buf.length, startOffset);
     const slice = buf.subarray(0, n);
@@ -350,22 +351,33 @@ const getCurrentMsgCount = (db: Database) => db.prepare<[string]>(
 
 // Mind is a separate private domain. Exclude its session transcripts from
 // this derived index and the automatic reflection/proposal consumers.
-function sessionScope(filePath: string): { cwd: string | null; privateMind: boolean } {
+function sessionScope(filePath: string, endOffset: number): { cwd: string | null; privateMind: boolean } {
   const fd = openSync(filePath, 'r');
   try {
     const buffer = Buffer.alloc(CHUNK_BYTES);
-    const count = readSync(fd, buffer, 0, buffer.length, 0);
+    const decoder = new StringDecoder('utf8');
     let cwd: string | null = null;
-    for (const line of buffer.subarray(0, count).toString('utf8').split('\n')) {
-      try {
-        const obj = JSON.parse(line);
-        const candidate = obj.cwd ??
-          ((obj.type === 'session_meta' || obj.type === 'turn_context') ? obj.payload?.cwd : null);
-        if (typeof candidate !== 'string') continue;
-        cwd ??= candidate;
-        if (/(?:^|\/)(?:mind|\.mind)(?:\/|$)/i.test(candidate))
-          return { cwd, privateMind: true };
-      } catch { /* incomplete final line or unrelated record */ }
+    let offset = 0;
+    let pending = '';
+    while (offset < endOffset) {
+      const count = readSync(fd, buffer, 0, Math.min(buffer.length, endOffset-offset), offset);
+      if (!count) break;
+      offset += count;
+      pending += decoder.write(buffer.subarray(0,count));
+      let boundary: number;
+      while ((boundary=pending.indexOf('\n')) >= 0) {
+        const line=pending.slice(0,boundary); pending=pending.slice(boundary+1);
+        if (!line.includes('"cwd"')) continue;
+        try {
+          const obj = JSON.parse(line);
+          const candidate = obj.cwd ??
+            ((obj.type === 'session_meta' || obj.type === 'turn_context') ? obj.payload?.cwd : null);
+          if (typeof candidate !== 'string') continue;
+          cwd ??= candidate;
+          if (/(?:^|\/)(?:mind|\.mind)(?:\/|$)/i.test(candidate))
+            return { cwd, privateMind: true };
+        } catch { /* malformed record is not indexed */ }
+      }
     }
     const projectDir = basename(dirname(filePath));
     return { cwd, privateMind: /(?:^|-)(?:mind|\.mind)(?:-|$)/i.test(projectDir) };
@@ -383,12 +395,12 @@ function forgetDerivedSession(db: Database, filePath: string): void {
 }
 
 export function indexFile(db: Database, filePath: string, source: Source = 'claude-code'): { messagesIndexed: number; bytesIngested: number } {
-  const scope = sessionScope(filePath);
+  const st = statSync(filePath);
+  const scope = sessionScope(filePath, st.size);
   if (scope.privateMind || (source === 'codex' && !scope.cwd)) {
     forgetDerivedSession(db, filePath);
     return { messagesIndexed: 0, bytesIngested: 0 };
   }
-  const st = statSync(filePath);
   const cursor = getCursor(db).get(filePath) as { byte_offset: number; mtime_ms: number } | undefined;
   const startOffset = cursor?.byte_offset ?? 0;
 
@@ -400,7 +412,7 @@ export function indexFile(db: Database, filePath: string, source: Source = 'clau
     return { messagesIndexed: 0, bytesIngested: 0 };
   }
 
-  const { text, newOffset } = readSafeChunk(filePath, startOffset);
+  const { text, newOffset } = readSafeChunk(filePath, startOffset, st.size);
   if (!text) return { messagesIndexed: 0, bytesIngested: 0 };
 
   const sessionId = sessionIdFromPath(filePath);
