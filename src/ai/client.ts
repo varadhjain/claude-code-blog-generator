@@ -231,7 +231,7 @@ export class OpenAIClient {
         { role: 'user', content: userPrompt },
       ],
       max_completion_tokens: maxTokens,
-      reasoning_effort: 'none',
+      reasoning_effort: 'high',
       response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
     });
 
