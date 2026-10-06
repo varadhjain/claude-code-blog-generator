@@ -1,7 +1,7 @@
 /**
  * Multi-provider AI client with token tracking.
- * Supports Anthropic (Claude) and OpenAI. Auto-detects available API key.
- * Priority: ANTHROPIC_API_KEY > OPENAI_API_KEY
+ * Supports OpenAI and Anthropic fallback. Auto-detects available API key.
+ * Priority: OPENAI_API_KEY > ANTHROPIC_API_KEY
  */
 
 import * as dotenv from 'dotenv';
@@ -111,9 +111,9 @@ const PROVIDERS = {
     outputCostPerToken: 4.00 / 1_000_000,  // $4.00/1M output
   },
   openai: {
-    model: 'gpt-5-nano',
-    inputCostPerToken: 0.05 / 1_000_000,
-    outputCostPerToken: 0.40 / 1_000_000,
+    model: 'gpt-6-luna',
+    inputCostPerToken: 0.10 / 1_000_000,
+    outputCostPerToken: 0.50 / 1_000_000,
   },
 } as const;
 
@@ -121,13 +121,13 @@ function detectProvider(): { provider: Provider; apiKey: string } {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  if (anthropicKey) return { provider: 'anthropic', apiKey: anthropicKey };
   if (openaiKey) return { provider: 'openai', apiKey: openaiKey };
+  if (anthropicKey) return { provider: 'anthropic', apiKey: anthropicKey };
 
   throw new Error(
     'No API key found. Set one of:\n\n' +
-    '   ANTHROPIC_API_KEY=sk-ant-...   (recommended for Claude Code users)\n' +
-    '   OPENAI_API_KEY=sk-proj-...     (OpenAI)\n\n' +
+    '   OPENAI_API_KEY=sk-proj-...     (preferred)\n' +
+    '   ANTHROPIC_API_KEY=sk-ant-...   (fallback when no OpenAI key is set)\n\n' +
     '   Add to .env file or export as environment variable.\n' +
     '   Get keys from:\n' +
     '     Anthropic: https://console.anthropic.com/settings/keys\n' +
@@ -231,6 +231,7 @@ export class OpenAIClient {
         { role: 'user', content: userPrompt },
       ],
       max_completion_tokens: maxTokens,
+      reasoning_effort: 'none',
       response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
     });
 

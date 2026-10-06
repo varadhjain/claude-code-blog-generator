@@ -42,7 +42,7 @@ ccblog anti-patterns --since 30d     # rediscovery / manual-toil / wrong-tool wa
 ccblog                       # interactive: session → blog post
 ```
 
-Search is free and instant. Blog/learn features use **Anthropic** (Claude Haiku) or **OpenAI** (gpt-5-nano) at ~$0.001/session.
+Search is free and instant. Blog/learn features prefer **OpenAI GPT-6 Luna**, with Anthropic retained as a fallback when no OpenAI key is present.
 
 ## What You Get
 
@@ -299,8 +299,8 @@ Uses whichever API key is available (checks in order):
 
 | Provider | Model | Cost/session | Env var |
 |----------|-------|-------------|---------|
+| **OpenAI** | gpt-6-luna | usage-based | `OPENAI_API_KEY` |
 | **Anthropic** | Claude Haiku 4.5 | ~$0.002 | `ANTHROPIC_API_KEY` |
-| **OpenAI** | gpt-5-nano | ~$0.001 | `OPENAI_API_KEY` |
 
 Set in `.env` file or environment. The setup wizard (`ccblog --setup`) walks you through it.
 

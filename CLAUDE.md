@@ -10,8 +10,8 @@
 This project supports **two providers** — auto-detected from available API keys:
 
 - ✅ **Anthropic**: `claude-haiku-4-5-20251001` ($0.80/$4.00 per 1M tokens) — recommended for Claude Code users
-- ✅ **OpenAI**: `gpt-5-nano` ($0.05/$0.40 per 1M tokens) — ultra-low cost
-- **Priority**: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY`
+- ✅ **OpenAI**: `gpt-6-luna` ($0.10/$0.50 per 1M tokens) — ordinary/high-volume default
+- **Priority**: `OPENAI_API_KEY` > `ANTHROPIC_API_KEY`
 
 **Target cost**: < $0.01 per session analysis
 
@@ -38,9 +38,9 @@ JSONL Session (raw transcript)
     ↓
 Session Digest Builder (extract 3k token summary)
     ↓
-Meta-Analysis (gpt-5-nano: identify goal, phases, best template)
+Meta-Analysis (gpt-6-luna: identify goal, phases, best template)
     ↓
-Guided Phase Classification (gpt-5-nano: detailed analysis of key sections)
+Guided Phase Classification (gpt-6-luna: detailed analysis of key sections)
     ↓
 Blog Post Generation (assemble narrative)
     ↓
@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-proj-...
 
 ## Key Technical Decisions
 
-1. **gpt-5-nano**: Ultra-low-cost, fast model perfect for high-volume analysis
+1. **gpt-6-luna**: Efficient default for high-volume analysis
 2. **Two-stage analysis**: Meta-analysis first (goal, structure) → detailed classification second
 3. **Session digest**: Pre-process JSONL into 3k token summary (saves 85-90% on costs)
 4. **TypeScript**: Type safety for complex JSONL parsing
@@ -83,7 +83,7 @@ OPENAI_API_KEY=sk-proj-...
 
 ## Development Guidelines
 
-1. **ALWAYS use gpt-5-nano** - Never deviate from this
+1. **Use gpt-6-luna for ordinary work**; reserve gpt-6.1-sol for deep coding
 2. **Track all token usage** - Every API call must log tokens and cost
 3. **Optimize before calling LLM** - Pre-process, summarize, deduplicate
 4. **Test on real sessions** - Use actual Claude Code transcripts
@@ -91,7 +91,7 @@ OPENAI_API_KEY=sk-proj-...
 
 ## Cost Tracking
 
-With gpt-5-nano pricing ($0.05/$0.40 per 1M tokens):
+With gpt-6-luna pricing ($0.10/$0.50 per 1M tokens):
 
 | Operation | Tokens | Cost | Notes |
 |-----------|--------|------|-------|
@@ -132,7 +132,7 @@ blog-post-generator/
 ## Current Status
 
 ✅ **Done**:
-- gpt-5-nano client integration
+- gpt-6-luna client integration
 - Phase classification prompt
 - JSONL parser
 - 6 blog template definitions
@@ -161,4 +161,4 @@ npx ts-node scripts/test-phase-classification.ts
 
 - Mitchell Hashimoto's blog: https://mitchellh.com/writing/non-trivial-vibing
 - AmpCode threads: https://ampcode.com/news/read-threads
-- OpenAI gpt-5-nano docs: https://platform.openai.com/docs/models/gpt-5-nano
+- OpenAI GPT-6 Luna docs: https://developers.openai.com/api/docs/models/gpt-6-luna
