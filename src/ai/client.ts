@@ -126,8 +126,8 @@ function detectProvider(): { provider: Provider; apiKey: string } {
 
   throw new Error(
     'No API key found. Set one of:\n\n' +
-    '   ANTHROPIC_API_KEY=sk-ant-...   (recommended for Claude Code users)\n' +
-    '   OPENAI_API_KEY=sk-proj-...     (OpenAI)\n\n' +
+    '   OPENAI_API_KEY=sk-proj-...     (preferred)\n' +
+    '   ANTHROPIC_API_KEY=sk-ant-...   (fallback when no OpenAI key is set)\n\n' +
     '   Add to .env file or export as environment variable.\n' +
     '   Get keys from:\n' +
     '     Anthropic: https://console.anthropic.com/settings/keys\n' +

@@ -299,8 +299,8 @@ Uses whichever API key is available (checks in order):
 
 | Provider | Model | Cost/session | Env var |
 |----------|-------|-------------|---------|
-| **Anthropic** | Claude Haiku 4.5 | ~$0.002 | `ANTHROPIC_API_KEY` |
 | **OpenAI** | gpt-6-luna | usage-based | `OPENAI_API_KEY` |
+| **Anthropic** | Claude Haiku 4.5 | ~$0.002 | `ANTHROPIC_API_KEY` |
 
 Set in `.env` file or environment. The setup wizard (`ccblog --setup`) walks you through it.
 
