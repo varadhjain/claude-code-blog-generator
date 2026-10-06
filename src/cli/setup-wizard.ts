@@ -79,7 +79,7 @@ async function setupAPIKey(): Promise<{ ok: boolean; message: string }> {
       {
         name: 'OpenAI',
         value: 'openai',
-        description: 'Uses gpt-5-nano — ultra-low cost'
+        description: 'Uses gpt-6-luna — ordinary/high-volume default'
       }
     ]
   });
