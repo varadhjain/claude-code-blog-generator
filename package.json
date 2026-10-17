@@ -55,7 +55,7 @@
     "better-sqlite3": "^13.0.3",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.3",
-    "handlebars": "^4.7.8",
+    "handlebars": "^4.7.10",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.1",
     "openai": "^4.104.0",
