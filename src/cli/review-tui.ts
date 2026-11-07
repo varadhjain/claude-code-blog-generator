@@ -31,6 +31,14 @@ async function clearPendingMarker(reviewedIds: Set<string>): Promise<void> {
   await fs.writeFile(PENDING_MARKER, JSON.stringify(marker, null, 2));
 }
 
+async function addPendingMarker(id: string): Promise<void> {
+  let marker: { ids: string[] } = { ids: [] };
+  try { marker = JSON.parse(await fs.readFile(PENDING_MARKER, 'utf-8')); } catch { /* create it below */ }
+  if (!marker.ids.includes(id)) marker.ids.push(id);
+  await fs.mkdir(path.dirname(PENDING_MARKER), { recursive: true });
+  await fs.writeFile(PENDING_MARKER, JSON.stringify(marker, null, 2));
+}
+
 function formatLearning(l: Learning, idx: number, total: number): string {
   const status = l.share_status ?? 'local';
   const statusBadge = status === 'reviewed' ? '✅ reviewed'
@@ -121,8 +129,13 @@ export async function runReview(opts: ReviewOptions = {}): Promise<void> {
     if (action === 'edit-tags') {
       // Minimal editor: just toggle inclusion of common ones for now.
       const newTags = await editTags(l);
-      await updateLearning(l.id, { tags: newTags });
+      // A prior share-ready decision applies to the reviewed content. Editing
+      // it invalidates that decision until the user explicitly reviews again.
+      await updateLearning(l.id, { tags: newTags, share_status: 'local', reviewed_at: null });
+      await addPendingMarker(l.id);
       l.tags = newTags;
+      l.share_status = 'local';
+      l.reviewed_at = null;
       continue; // re-prompt on the same item
     }
 

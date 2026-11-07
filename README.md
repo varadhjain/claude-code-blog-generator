@@ -222,6 +222,8 @@ ccblog status              # how many drafts are pending? (--count for shell pro
 
 Each item shows: type, problem, solution, files touched, **what the redactor stripped** (counts + categories), and current status. Choose `share-ready` / `keep-private` / `edit tags` / `delete` / `skip` / `quit`.
 
+Editing tags clears a prior share-ready decision, returns the learning to `local`, and restores its pending-review marker; review it again before it becomes eligible for an outbound publisher.
+
 The outbound publisher (Notion / git / S3 / etc) is **intentionally not built yet** — the contract is that the *gate exists before any door does*. Any future publisher MUST refuse to read anything other than `share_status === 'reviewed'`.
 
 **As an MCP server** (one server, all tools — search + learnings):
