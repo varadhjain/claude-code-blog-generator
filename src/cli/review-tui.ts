@@ -129,13 +129,15 @@ export async function runReview(opts: ReviewOptions = {}): Promise<void> {
     if (action === 'edit-tags') {
       // Minimal editor: just toggle inclusion of common ones for now.
       const newTags = await editTags(l);
-      // A prior share-ready decision applies to the reviewed content. Editing
-      // it invalidates that decision until the user explicitly reviews again.
-      await updateLearning(l.id, { tags: newTags, share_status: 'local', reviewed_at: null });
-      await addPendingMarker(l.id);
+      // Editing approved content invalidates that approval. A private choice
+      // remains private; only local items belong in the pending marker.
+      const nextStatus: Status = l.share_status === 'private' ? 'private' : 'local';
+      const nextReviewedAt = nextStatus === 'private' ? (l.reviewed_at ?? null) : null;
+      await updateLearning(l.id, { tags: newTags, share_status: nextStatus, reviewed_at: nextReviewedAt });
+      if (nextStatus === 'local') await addPendingMarker(l.id);
       l.tags = newTags;
-      l.share_status = 'local';
-      l.reviewed_at = null;
+      l.share_status = nextStatus;
+      l.reviewed_at = nextReviewedAt;
       continue; // re-prompt on the same item
     }
 
