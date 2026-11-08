@@ -350,6 +350,7 @@ export function getInlineStyles(): string {
 
       /* Code blocks */
       pre {
+        position: relative;
         background: #f6f8fa;
         border: 1px solid #d0d7de;
         border-radius: 6px;
@@ -358,6 +359,19 @@ export function getInlineStyles(): string {
         font-size: 0.875rem;
         line-height: 1.45;
         margin: 1rem 0;
+      }
+
+      pre.has-overflow::after {
+        content: '↔ Scroll for code';
+        position: absolute;
+        right: 0.5rem;
+        bottom: 0.5rem;
+        padding: 0.2rem 0.45rem;
+        border-radius: 4px;
+        background: rgba(36, 41, 46, 0.9);
+        color: #ffffff;
+        font: 0.75rem/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        pointer-events: none;
       }
 
       code {

@@ -41,6 +41,7 @@ async function addPendingMarker(id: string): Promise<void> {
 
 function formatLearning(l: Learning, idx: number, total: number): string {
   const status = l.share_status ?? 'local';
+  const narrow = (process.stdout.columns || 80) < 68;
   const statusBadge = status === 'reviewed' ? '✅ reviewed'
     : status === 'private' ? '🔒 private'
     : '📝 local-only';
@@ -50,9 +51,13 @@ function formatLearning(l: Learning, idx: number, total: number): string {
 
   return [
     '',
-    `╔═══════════════════════════════════════════════════════════╗`,
-    `║  📚 Learning ${idx + 1} / ${total}     ${statusBadge.padEnd(40)}║`,
-    `╚═══════════════════════════════════════════════════════════╝`,
+    ...(narrow
+      ? [`ccblog review · Learning ${idx + 1} / ${total}`, `Status: ${statusBadge}`]
+      : [
+          `╔═══════════════════════════════════════════════════════════╗`,
+          `║  📚 Learning ${idx + 1} / ${total}     ${statusBadge.padEnd(40)}║`,
+          `╚═══════════════════════════════════════════════════════════╝`,
+        ]),
     '',
     `  Type:     ${l.type}`,
     `  Date:     ${l.source_date}    Author: ${l.author ?? '?'}`,
@@ -86,9 +91,13 @@ export async function runReview(opts: ReviewOptions = {}): Promise<void> {
     : all.filter(l => (l.share_status ?? 'local') === 'local');
 
   console.clear();
-  console.log('╔═══════════════════════════════════════════════════════════╗');
-  console.log('║  🔍 ccblog review — triage learnings before sharing       ║');
-  console.log('╚═══════════════════════════════════════════════════════════╝');
+  if ((process.stdout.columns || 80) < 68) {
+    console.log('ccblog review · triage before sharing');
+  } else {
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║  🔍 ccblog review — triage learnings before sharing       ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+  }
   console.log('');
   console.log(`  ${queue.length} ${opts.all ? 'total' : 'pending'} learning(s)`);
   console.log('');

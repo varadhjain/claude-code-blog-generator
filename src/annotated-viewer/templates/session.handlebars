@@ -28,7 +28,7 @@
   </div>
 
   {{! Focus Mode Toggle }}
-  <button class="focus-toggle" onclick="toggleFocusMode()">
+  <button class="focus-toggle" type="button" aria-pressed="false" aria-controls="messages-container" onclick="toggleFocusMode()">
     <span id="focus-toggle-text">Focus Mode: OFF</span>
   </button>
 
@@ -72,13 +72,29 @@
       focusMode = !focusMode;
       const nonKeyMessages = document.querySelectorAll('.message.non-key');
       const toggleText = document.getElementById('focus-toggle-text');
+      const toggleButton = document.querySelector('.focus-toggle');
 
       nonKeyMessages.forEach(msg => {
         msg.style.display = focusMode ? 'none' : 'block';
       });
 
-      toggleText.textContent = focusMode ? 'Focus Mode: ON' : 'Focus Mode: OFF';
+      toggleButton.setAttribute('aria-pressed', String(focusMode));
+      toggleText.textContent = focusMode
+        ? `Focus Mode: ON · ${nonKeyMessages.length} hidden`
+        : 'Focus Mode: OFF · 0 hidden';
     }
+
+    function updateCodeScrollHints() {
+      document.querySelectorAll('pre').forEach(block => {
+        block.classList.remove('has-overflow');
+        if (block.scrollWidth > block.clientWidth + 1) {
+          block.classList.add('has-overflow');
+        }
+      });
+    }
+
+    updateCodeScrollHints();
+    window.addEventListener('resize', updateCodeScrollHints);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
