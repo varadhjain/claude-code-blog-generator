@@ -19,6 +19,15 @@ const ids = /^[0-9a-f]{32}$|^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const opaque = (v: unknown): string | null => typeof v === 'string' && ids.test(v) ? v.replace(/-/g, '').toLowerCase() : null;
 const count = (v: unknown): number | null => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= 10_000_000 ? v : null;
 const money = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+function cleanUsage(raw: Partial<ObsUsage>): ObsUsage {
+  const u = { input_tokens: count(raw.input_tokens), output_tokens: count(raw.output_tokens), cached_input_tokens: count(raw.cached_input_tokens), cache_write_tokens: count(raw.cache_write_tokens), reasoning_tokens: count(raw.reasoning_tokens) };
+  if (u.input_tokens === null || (u.cached_input_tokens !== null && u.cached_input_tokens > u.input_tokens) || (u.cache_write_tokens !== null && u.cache_write_tokens > u.input_tokens) || (u.cached_input_tokens !== null && u.cache_write_tokens !== null && u.cached_input_tokens + u.cache_write_tokens > u.input_tokens)) {
+    u.cached_input_tokens = null; u.cache_write_tokens = null;
+  }
+  if (u.output_tokens === null || (u.reasoning_tokens !== null && u.reasoning_tokens > u.output_tokens)) u.reasoning_tokens = null;
+  return u;
+}
+
 function directory(): string {
   if (process.env.NODE_ENV === 'production' && !process.env.OBSERVABILITY_DIR) throw new Error('model_persistent_storage_required');
   return process.env.OBSERVABILITY_DIR || join(homedir(), '.firm-stack', 'observability', APP);
@@ -78,7 +87,7 @@ async function saveBudget(dir: string, state: Budget): Promise<void> {
   await rename(tmp, path); await chmod(path, 0o600); await syncDirectory(dir);
 }
 function record(attempt: ObsAttempt, phase: 'intent' | 'attempt' | 'outcome', result?: ObsResult, cost: number | null = null, basis = 'unavailable'): object {
-  const usage = result?.usage || {};
+  const usage = cleanUsage(result?.usage || {});
   const status = result?.http_status;
   const requestId = typeof result?.request_id === 'string' && /^req_[A-Za-z0-9_-]{1,120}$/.test(result.request_id) ? result.request_id : null;
   const responseId = typeof result?.response_id === 'string' && /^chatcmpl-[A-Za-z0-9_-]{1,120}$/.test(result.response_id) ? result.response_id : null;
@@ -116,6 +125,8 @@ export function pricedCost(result: ObsResult): { cost: number | null; basis: str
   const u = result.usage || {}; const input = count(u.input_tokens); const output = count(u.output_tokens);
   if (result.returned_model !== MODEL || result.returned_tier !== 'default' || input === null || output === null) return { cost: null, basis: 'unavailable' };
   const cached = count(u.cached_input_tokens); const written = count(u.cache_write_tokens);
+  const reasoning = count(u.reasoning_tokens);
+  if ((cached !== null && cached > input) || (written !== null && written > input) || (reasoning !== null && reasoning > output)) return { cost: null, basis: 'unavailable' };
   const multiplier = input > 272_000 ? 2 : 1; const outputRate = input > 272_000 ? 0.75 : 0.50;
   if (cached !== null && written !== null) {
     if (cached + written > input) return { cost: null, basis: 'unavailable' };

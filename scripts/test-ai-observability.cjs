@@ -35,6 +35,10 @@ async function main() {
   assert.equal(rows[2].cost_usd, 0.0000251); assert.equal(fs.statSync(dir).mode & 0o777, 0o700); assert.equal(fs.statSync(path.join(dir, 'events.jsonl')).mode & 0o777, 0o600);
   assert(!JSON.stringify(rows).includes('PRIVATE')); assert(!JSON.stringify(rows).includes('fixture-key'));
   console.log('success_usage_privacy_modes PASS');
+  dir = config('inconsistent-usage');
+  await fake(async () => response({ usage: { prompt_tokens: 100, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 90, cache_write_tokens: 30 }, completion_tokens_details: { reasoning_tokens: 99 } } })).callText('x', 's', 'p');
+  rows = readEvents(dir); assert.equal(rows[2].usage.cached_input_tokens, null); assert.equal(rows[2].usage.cache_write_tokens, null); assert.equal(rows[2].usage.reasoning_tokens, null); assert.equal(rows[2].cost_usd, null);
+  console.log('inconsistent_optional_usage_unknown PASS');
   dir = config('missing-cap'); process.env.OBSERVABILITY_BUDGETS_JSON = '{}'; calls = 0;
   await assert.rejects(fake(async () => { calls++; return response(); }).callText('x', 's', 'p'), /model_preflight_unavailable/); assert.equal(calls, 0);
   console.log('missing_cap_no_dispatch PASS');
