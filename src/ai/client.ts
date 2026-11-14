@@ -1,20 +1,22 @@
+import { beginAttempt, finishAttempt, type ObsAttempt } from './observability';
 /**
  * Multi-provider AI client with token tracking.
- * Supports OpenAI and Anthropic fallback. Auto-detects available API key.
+ * OpenAI calls require durable explicit caps; unpriced providers are blocked.
  * Priority: OPENAI_API_KEY > ANTHROPIC_API_KEY
  */
 
 import * as dotenv from 'dotenv';
+import { randomUUID } from 'node:crypto';
 
 dotenv.config();
 
 export type Provider = 'anthropic' | 'openai';
 
 export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-  cost: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  cost: number | null;
 }
 
 export class TokenTracker {
@@ -42,21 +44,23 @@ export class TokenTracker {
 
   private summarizeUsages(_type: string, usages: TokenUsage[]): Record<string, any> {
     if (usages.length === 0) {
-      return { calls: 0, totalTokens: 0, totalCost: 0 };
+      return { calls: 0, totalTokens: 0, totalCost: 0, unknownCostCalls: 0, unknownUsageCalls: 0 };
     }
 
-    const total = usages.reduce(
+    const total = usages.reduce<{ promptTokens: number; completionTokens: number; totalTokens: number; cost: number }>(
       (acc, u) => ({
-        promptTokens: acc.promptTokens + u.promptTokens,
-        completionTokens: acc.completionTokens + u.completionTokens,
-        totalTokens: acc.totalTokens + u.totalTokens,
-        cost: acc.cost + u.cost,
+        promptTokens: acc.promptTokens + (u.promptTokens ?? 0),
+        completionTokens: acc.completionTokens + (u.completionTokens ?? 0),
+        totalTokens: acc.totalTokens + (u.totalTokens ?? 0),
+        cost: acc.cost + (u.cost ?? 0),
       }),
       { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 }
     );
 
     return {
       calls: usages.length,
+      unknownCostCalls: usages.filter(u => u.cost === null).length,
+      unknownUsageCalls: usages.filter(u => u.totalTokens === null).length,
       totalTokens: total.totalTokens,
       avgTokensPerCall: Math.round(total.totalTokens / usages.length),
       totalCost: total.cost,
@@ -74,9 +78,9 @@ export class TokenTracker {
       lines.push(
         `\n${type}:`,
         `  Calls: ${stat.calls}`,
-        `  Total tokens: ${stat.totalTokens.toLocaleString()}`,
+        `  Known tokens: ${stat.totalTokens.toLocaleString()} (${stat.unknownUsageCalls} calls unknown)`,
         `  Avg tokens/call: ${stat.avgTokensPerCall}`,
-        `  Total cost: $${stat.totalCost.toFixed(6)}`,
+        `  Known cost subtotal: $${stat.totalCost.toFixed(6)} (${stat.unknownCostCalls} calls unknown)`,
         `  Avg cost/call: $${stat.avgCostPerCall.toFixed(6)}`
       );
     }
@@ -86,16 +90,18 @@ export class TokenTracker {
         calls: acc.calls + stat.calls,
         totalTokens: acc.totalTokens + stat.totalTokens,
         totalCost: acc.totalCost + stat.totalCost,
+        unknownCostCalls: acc.unknownCostCalls + stat.unknownCostCalls,
+        unknownUsageCalls: acc.unknownUsageCalls + stat.unknownUsageCalls,
       }),
-      { calls: 0, totalTokens: 0, totalCost: 0 }
+      { calls: 0, totalTokens: 0, totalCost: 0, unknownCostCalls: 0, unknownUsageCalls: 0 }
     );
 
     lines.push(
       '\n' + '='.repeat(80),
       'TOTAL:',
       `  Calls: ${grandTotal.calls}`,
-      `  Total tokens: ${grandTotal.totalTokens.toLocaleString()}`,
-      `  Total cost: $${grandTotal.totalCost.toFixed(6)}`,
+      `  Known tokens: ${grandTotal.totalTokens.toLocaleString()} (${grandTotal.unknownUsageCalls} calls unknown)`,
+      `  Known cost subtotal: $${grandTotal.totalCost.toFixed(6)} (${grandTotal.unknownCostCalls} calls unknown)`,
       '\n'
     );
 
@@ -103,18 +109,10 @@ export class TokenTracker {
   }
 }
 
-// Provider configs
+// Unpriced providers retain identity, but cannot dispatch.
 const PROVIDERS = {
-  anthropic: {
-    model: 'claude-haiku-4-5-20251001',
-    inputCostPerToken: 0.80 / 1_000_000,  // $0.80/1M input
-    outputCostPerToken: 4.00 / 1_000_000,  // $4.00/1M output
-  },
-  openai: {
-    model: 'gpt-6-luna',
-    inputCostPerToken: 0.10 / 1_000_000,
-    outputCostPerToken: 0.50 / 1_000_000,
-  },
+  anthropic: { model: 'claude-haiku-4-5-20251001' },
+  openai: { model: 'gpt-6-luna' },
 } as const;
 
 function detectProvider(): { provider: Provider; apiKey: string } {
@@ -124,27 +122,19 @@ function detectProvider(): { provider: Provider; apiKey: string } {
   if (openaiKey) return { provider: 'openai', apiKey: openaiKey };
   if (anthropicKey) return { provider: 'anthropic', apiKey: anthropicKey };
 
-  throw new Error(
-    'No API key found. Set one of:\n\n' +
-    '   OPENAI_API_KEY=sk-proj-...     (preferred)\n' +
-    '   ANTHROPIC_API_KEY=sk-ant-...   (fallback when no OpenAI key is set)\n\n' +
-    '   Add to .env file or export as environment variable.\n' +
-    '   Get keys from:\n' +
-    '     Anthropic: https://console.anthropic.com/settings/keys\n' +
-    '     OpenAI:    https://platform.openai.com/api-keys'
-  );
+  throw new Error('model_credential_unavailable');
 }
 
 /**
  * Unified AI client. Auto-detects provider from available API keys.
- * Supports both Anthropic (Claude) and OpenAI with identical interface.
+ * Unpriced providers fail before dispatch; provider errors never cause fallback.
  */
 export class OpenAIClient {
   private provider: Provider;
   private apiKey: string;
   private tokenTracker: TokenTracker;
-  private anthropicClient: any;
   private openaiClient: any;
+  private readonly traceId = randomUUID();
 
   constructor(tokenTracker?: TokenTracker) {
     const detected = detectProvider();
@@ -165,155 +155,75 @@ export class OpenAIClient {
     return this.tokenTracker;
   }
 
-  private async getAnthropicClient() {
-    if (!this.anthropicClient) {
-      const { default: Anthropic } = await import('@anthropic-ai/sdk');
-      this.anthropicClient = new Anthropic({ apiKey: this.apiKey });
-    }
-    return this.anthropicClient;
-  }
-
   private async getOpenAIClient() {
     if (!this.openaiClient) {
       const { default: OpenAI } = await import('openai');
-      this.openaiClient = new OpenAI({ apiKey: this.apiKey });
+      this.openaiClient = new OpenAI({ apiKey: this.apiKey, maxRetries: 0, timeout: 120_000 });
     }
     return this.openaiClient;
-  }
-
-  private trackUsage(promptType: string, inputTokens: number, outputTokens: number): void {
-    const config = PROVIDERS[this.provider];
-    const usage: TokenUsage = {
-      promptTokens: inputTokens,
-      completionTokens: outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      cost: inputTokens * config.inputCostPerToken + outputTokens * config.outputCostPerToken,
-    };
-    this.tokenTracker.track(promptType, usage);
-  }
-
-  private async callAnthropic(
-    systemPrompt: string,
-    userPrompt: string,
-    maxTokens: number
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-    const client = await this.getAnthropicClient();
-    const response = await client.messages.create({
-      model: PROVIDERS.anthropic.model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
-
-    const content = response.content
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('');
-
-    return {
-      content,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    };
-  }
-
-  private async callOpenAI(
-    systemPrompt: string,
-    userPrompt: string,
-    maxTokens: number,
-    responseFormat?: 'json_object' | 'text'
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-    const client = await this.getOpenAIClient();
-    const response = await client.chat.completions.create({
-      model: PROVIDERS.openai.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_completion_tokens: maxTokens,
-      reasoning_effort: 'high',
-      response_format: responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
-    });
-
-    const content = response.choices[0]?.message?.content || '';
-    return {
-      content,
-      inputTokens: response.usage?.prompt_tokens || 0,
-      outputTokens: response.usage?.completion_tokens || 0,
-    };
   }
 
   async callStructured<T = any>(
     promptType: string,
     systemPrompt: string,
     userPrompt: string,
-    options: {
-      temperature?: number;
-      maxTokens?: number;
-      responseFormat?: 'json_object' | 'text';
-    } = {}
+    options: { temperature?: number; maxTokens?: number; responseFormat?: 'json_object' | 'text' } = {}
   ): Promise<T> {
+    // Anthropic pricing/cache/tier bounds have not been established for this
+    // workload. Key presence never grants an unpriced provider fallback.
+    if (this.provider !== 'openai') throw new Error('model_provider_accounting_unavailable');
     const { maxTokens = 2500, responseFormat = 'json_object' } = options;
-
-    // For Anthropic, add JSON instruction to system prompt when JSON is requested
-    const effectiveSystemPrompt =
-      this.provider === 'anthropic' && responseFormat === 'json_object'
-        ? systemPrompt + '\n\nIMPORTANT: Respond with valid JSON only. No other text.'
-        : systemPrompt;
-
+    if (typeof systemPrompt !== 'string' || typeof userPrompt !== 'string' || !userPrompt.trim() || !['json_object', 'text'].includes(responseFormat)) throw new Error('model_request_invalid');
+    const params = {
+      model: PROVIDERS.openai.model,
+      messages: [{ role: 'system' as const, content: systemPrompt }, { role: 'user' as const, content: userPrompt }],
+      max_completion_tokens: maxTokens, reasoning_effort: 'high' as const,
+      service_tier: 'default' as const,
+      ...(responseFormat === 'json_object' ? { response_format: { type: 'json_object' as const } } : {}),
+    };
+    let attempt: ObsAttempt;
+    try { attempt = await beginAttempt(params, this.traceId); }
+    catch { throw new Error('model_preflight_unavailable'); }
+    let response: any;
     try {
-      let result: { content: string; inputTokens: number; outputTokens: number };
-
-      if (this.provider === 'anthropic') {
-        result = await this.callAnthropic(effectiveSystemPrompt, userPrompt, maxTokens);
-      } else {
-        result = await this.callOpenAI(effectiveSystemPrompt, userPrompt, maxTokens, responseFormat);
-      }
-
-      this.trackUsage(promptType, result.inputTokens, result.outputTokens);
-
-      if (!result.content) {
-        throw new Error(`No content in response from ${this.provider} API`);
-      }
-
-      if (responseFormat === 'json_object') {
-        // Extract JSON from response (handles markdown code blocks)
-        let jsonStr = result.content.trim();
-        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) jsonStr = jsonMatch[1].trim();
-
-        try {
-          return JSON.parse(jsonStr) as T;
-        } catch (parseError) {
-          throw new Error(`Failed to parse JSON response: ${jsonStr.substring(0, 200)}...`);
-        }
-      }
-
-      return result.content as T;
-    } catch (error: any) {
-      if (error.code === 'insufficient_quota' || error.status === 429) {
-        throw new Error(
-          `${this.provider} API quota exceeded.\n\n` +
-          '   Add credits to your account.'
-        );
-      }
-
-      if (error.code === 'invalid_api_key' || error.status === 401) {
-        throw new Error(
-          `Invalid ${this.provider} API key.\n\n` +
-          '   Check your .env file and verify the API key is correct.'
-        );
-      }
-
-      if (error.message?.includes('ENOTFOUND') || error.message?.includes('ECONNREFUSED')) {
-        throw new Error(
-          `Cannot connect to ${this.provider} API.\n\n` +
-          '   Check your internet connection and try again.'
-        );
-      }
-
-      throw error;
+      const client = await this.getOpenAIClient();
+      response = await client.chat.completions.create(params);
+    } catch (error: unknown) {
+      const detail = error as { status?: number; name?: string };
+      const category = detail?.status === 401 || detail?.status === 403 ? 'auth' : detail?.status === 429 ? 'quota' : detail?.name === 'AbortError' || detail?.name === 'APIConnectionTimeoutError' ? 'timeout' : 'provider_error';
+      await finishAttempt(attempt, { outcome: 'error', error_category: category, http_status: detail?.status });
+      throw new Error('model_call_' + category);
     }
+    const raw = response?.usage;
+    const value = (v: unknown): number | null => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= 10_000_000 ? v : null;
+    const usage = {
+      input_tokens: value(raw?.prompt_tokens), output_tokens: value(raw?.completion_tokens),
+      cached_input_tokens: value(raw?.prompt_tokens_details?.cached_tokens),
+      cache_write_tokens: value(raw?.prompt_tokens_details?.cache_write_tokens),
+      reasoning_tokens: value(raw?.completion_tokens_details?.reasoning_tokens),
+    };
+    const choice = response?.choices?.[0];
+    const content = typeof choice?.message?.content === 'string' ? choice.message.content : '';
+    const completed = choice?.finish_reason === 'stop' && Boolean(content);
+    const cost = await finishAttempt(attempt, {
+      outcome: completed ? 'success' : 'incomplete', returned_model: response?.model,
+      returned_tier: response?.service_tier, request_id: response?._request_id,
+      response_id: response?.id, usage,
+    });
+    this.tokenTracker.track(promptType, {
+      promptTokens: usage.input_tokens, completionTokens: usage.output_tokens,
+      totalTokens: usage.input_tokens === null || usage.output_tokens === null ? null : usage.input_tokens + usage.output_tokens,
+      cost,
+    });
+    if (!completed) throw new Error('model_response_incomplete');
+    if (responseFormat === 'json_object') {
+      let json = content.trim();
+      const code = json.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (code) json = code[1].trim();
+      try { return JSON.parse(json) as T; }
+      catch { throw new Error('model_response_invalid_json'); }
+    }
+    return content as T;
   }
 
   async callText(

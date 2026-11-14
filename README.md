@@ -8,6 +8,8 @@
 
 ---
 
+Model generation requires an explicit lifetime USD cap in `OBSERVABILITY_BUDGETS_JSON` under `blog-post-generator.generate`. Missing caps block dispatch. Private metadata and durable reservations live in `OBSERVABILITY_DIR` (required persistent storage in production), or `~/.firm-stack/observability/blog-post-generator` locally. Unknown outcomes retain their allowance; there is no automatic provider fallback. Only bounded `gpt-6-luna` Standard calls are enabled; Anthropic remains blocked until its pricing and cache bounds are established.
+
 ## Why?
 
 Your `~/.claude/projects/` is hundreds of megabytes of `.jsonl` transcripts — unsearchable, unreadable, and expensive to point Claude at. `ccblog` turns that archive into something useful:
