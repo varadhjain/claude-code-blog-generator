@@ -1,6 +1,21 @@
-# ccblog
+# Bilan
 
-**A Claude Code session toolkit: search, distill, and publish your history.**
+**Personal coding-agent evals from your local session history.**
+
+Run `bilan compare --project /path/to/project --since 30d --evidence` for a
+local terminal scorecard. It reads Claude Code and Codex session logs for that
+exact working directory and compares the two largest model-and-harness
+cohorts. Pass `--model SOURCE/MODEL` twice to pick the cohorts.
+
+The scorecard shows explicit correction, repeat-failure and undo phrases per
+turn with a text follow-up. It also shows recorded cancellations per started
+turn, median completed-turn time, and coverage. `--evidence` lists local
+file and line references for up to three matches per reaction and cohort.
+The command reads locally and prints the report to your terminal.
+
+## ccblog
+
+**A Claude Code session toolkit for searching, distilling, and publishing your history.**
 
 [![GitHub stars](https://img.shields.io/github/stars/varadhjain/claude-code-blog-generator)](https://github.com/varadhjain/claude-code-blog-generator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
