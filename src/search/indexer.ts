@@ -351,7 +351,9 @@ const getCurrentMsgCount = (db: Database) => db.prepare<[string]>(
 
 // Mind is a separate private domain. Exclude its session transcripts from
 // this derived index and the automatic reflection/proposal consumers.
-function sessionScope(filePath: string, endOffset: number, source: Source): { cwd: string | null; privateMind: boolean } {
+export function sessionScope(
+  filePath: string, endOffset: number, source: Source, { skipCodexBootstrap = false } = {},
+): { cwd: string | null; privateMind: boolean } {
   const fd = openSync(filePath, 'r');
   try {
     const buffer = Buffer.alloc(CHUNK_BYTES);
@@ -359,6 +361,7 @@ function sessionScope(filePath: string, endOffset: number, source: Source): { cw
     let cwd: string | null = null;
     let offset = 0;
     let pending = '';
+    let sawCodexTurnContext = false;
     while (offset < endOffset) {
       const count = readSync(fd, buffer, 0, Math.min(buffer.length, endOffset-offset), offset);
       if (!count) break;
@@ -369,10 +372,23 @@ function sessionScope(filePath: string, endOffset: number, source: Source): { cw
         const line=pending.slice(0,boundary); pending=pending.slice(boundary+1);
         try {
           const obj = JSON.parse(line);
+          if (source === 'codex' && obj.type === 'turn_context') sawCodexTurnContext = true;
+          // Codex presents its initial injected AGENTS instructions and
+          // environment as a single user-role item before the first turn context.
+          // Inspect all actual user messages, including later mentions of Mind.
+          const blocks = obj.payload?.content;
+          const bootstrap = skipCodexBootstrap && source === 'codex' && !sawCodexTurnContext &&
+            obj.type === 'response_item' && obj.payload?.type === 'message' && obj.payload?.role === 'user' &&
+            Array.isArray(blocks) && blocks.length === 2 &&
+            blocks.every(block => block?.type === 'input_text' && typeof block.text === 'string') &&
+            blocks[0].text.startsWith('# AGENTS.md instructions for ') &&
+            blocks[0].text.trimEnd().endsWith('</INSTRUCTIONS>') &&
+            blocks[1].text.trim().startsWith('<environment_context>') &&
+            blocks[1].text.trimEnd().endsWith('</environment_context>');
           // Some Mind chats run from the shared workspace. Exclude explicit
           // Mind-domain conversations too, without inspecting system/context
           // or raw tool-output text. Ambiguous mentions are held out.
-          const message = source === 'codex' ? parseCodexLine(line, 0) : parseLine(line, 0);
+          const message = bootstrap ? null : source === 'codex' ? parseCodexLine(line, 0) : parseLine(line, 0);
           const conversation = message ? message.userText + '\n' + message.assistantText : '';
           if (/\bMind\b/.test(conversation) || /\bprivate journal\b|\bmind (?:app|journal|bot|game)\b|\/\.mind(?:\/|\b)/i.test(conversation))
             return { cwd, privateMind: true };
