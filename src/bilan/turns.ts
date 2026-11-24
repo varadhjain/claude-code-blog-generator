@@ -8,6 +8,8 @@ export interface Turn {
   model?: string;
   status?: 'completed' | 'cancelled';
   duration?: number;
+  prompt?: string;
+  answer?: { line: number; text: string };
   followup?: { line: number; text: string };
 }
 
@@ -56,14 +58,24 @@ export function readTurns(source: Source, cwd: string) {
         if (['interrupted', 'cancelled', 'canceled'].includes(String(payload.reason).toLowerCase())) turn.status = 'cancelled';
       } else {
         turn.status = 'completed';
+        if (!turn.answer && typeof payload.last_agent_message === 'string' && payload.last_agent_message.trim()) {
+          turn.answer = { line, text: payload.last_agent_message.slice(0, 4000) };
+        }
         const duration = payload.duration_ms ?? time - turn.started;
         if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) turn.duration = duration;
       }
+    } else if (row.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant' &&
+               (payload.phase === 'final_answer' || payload.channel === 'final') &&
+               Array.isArray(payload.content) && active && !active.status) {
+      const text = humanText(payload.content.map((block: Entry) =>
+        block?.type === 'output_text' ? { ...block, type: 'text' } : block));
+      if (text) active.answer = { line, text: text.slice(0, 4000) };
     } else if (row.type === 'response_item' && payload.type === 'message' && payload.role === 'user' &&
                active && !active.status && !codexPromptSeen) {
       const text = humanText(payload.content);
       if (!text) return;
       codexPromptSeen = true;
+      active.prompt = text.slice(0, 4000);
       if (previousCodex?.status === 'completed' && previousCodex.cwd === active.cwd) {
         previousCodex.followup = { line, text };
       }
@@ -90,7 +102,7 @@ export function readTurns(source: Source, cwd: string) {
         if (text && Number.isFinite(time)) {
           turn = {
             id: typeof row.uuid === 'string' ? row.uuid : undefined,
-            line, cwd: typeof row.cwd === 'string' ? row.cwd : cwd, started: time,
+            line, cwd: typeof row.cwd === 'string' ? row.cwd : cwd, started: time, prompt: text.slice(0, 4000),
           };
           if (parent?.status === 'completed' && parent.cwd === turn.cwd && !parent.followup) parent.followup = { line, text };
           turns.push(turn);
@@ -102,8 +114,13 @@ export function readTurns(source: Source, cwd: string) {
       if (typeof message.model === 'string' && message.model) models?.add(message.model);
       turn.model = models?.size === 1 ? models.values().next().value : undefined;
       if (['end_turn', 'stop_sequence'].includes(message.stop_reason)) {
-        turn.status = 'completed';
-        if (time >= turn.started) turn.duration = time - turn.started;
+        const text = humanText(message.content);
+        if (text) turn.answer = { line, text: text.slice(0, 4000) };
+        // Claude can emit an end_turn thinking block before the visible reply.
+        if (text || !Array.isArray(message.content) || !message.content.every((block: Entry) => block?.type === 'thinking')) {
+          turn.status = 'completed';
+          if (time >= turn.started) turn.duration = time - turn.started;
+        }
       }
     }
     active = turn;

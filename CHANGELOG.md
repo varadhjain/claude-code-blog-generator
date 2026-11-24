@@ -2,6 +2,9 @@
 
 All notable changes to this project. One line per release.
 
+## v1.1.0
+- Bilan reviews one model's local sessions by default, saves cited findings on request, and includes a side-by-side comparison. The legacy `ccblog` command remains available.
+
 ## 2026-10-05
 - Weekly digest uses the local mail-service and its bare-address sender contract, reads only the bearer token without shell evaluation, and counts files from the actual run start with a macOS-compatible marker; live scheduled execution still needs its Downloads permission restored.
 

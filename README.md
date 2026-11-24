@@ -2,24 +2,41 @@
 
 **Personal coding-agent evals from your local session history.**
 
-Run `bilan compare --project /path/to/project --since 30d --evidence` for a
-local terminal scorecard. It reads Claude Code and Codex session logs for that
-exact working directory and compares the two largest model-and-harness
-cohorts. Pass `--model SOURCE/MODEL` twice to pick the cohorts.
+Install the [latest release](https://github.com/varadhjain/bilan/releases/latest) with Node.js 22 or later:
 
-The scorecard shows explicit correction, repeat-failure and undo phrases per
-turn with a text follow-up. It also shows recorded cancellations per started
-turn, median completed-turn time, and coverage. `--evidence` lists local
-file and line references for up to three matches per reaction and cohort.
-The command reads locally and prints the report to your terminal.
+```bash
+npm install -g https://github.com/varadhjain/bilan/releases/download/v1.1.0/bilan-1.1.0.tgz
+```
+
+Run Bilan from the project you want to review:
+
+```bash
+bilan                                          # review the most-used model in this project
+bilan review --model codex/gpt-6.2-sol --since 30d
+bilan review --model codex/gpt-6.2-sol --keep verify
+bilan learnings verification                   # find saved guidance for this project
+bilan compare --since 30d --evidence            # compare the two largest model cohorts
+```
+
+Review proposes recurring observations from recorded interruptions and explicit
+language in the original prompt, reply and follow-up. It cites local file and line
+references and suggests one thing to try for each finding. An explicit
+`--keep FINDING` saves the finding you reviewed with its evidence in
+`~/.bilan/learnings`. Saved evidence references the original logs.
+
+Both commands read Claude Code and Codex logs locally, deduplicate copied turns,
+and filter to the exact session working directory. Use `--project PATH` to select a
+different workspace. Comparison shows correction, repeat-failure and undo phrases,
+recorded cancellations, median completed-turn time, and coverage. Pass
+`--model SOURCE/MODEL` twice to compare specific cohorts.
 
 ## ccblog
 
 **A Claude Code session toolkit for searching, distilling, and publishing your history.**
 
-[![GitHub stars](https://img.shields.io/github/stars/varadhjain/claude-code-blog-generator)](https://github.com/varadhjain/claude-code-blog-generator)
+[![GitHub stars](https://img.shields.io/github/stars/varadhjain/bilan)](https://github.com/varadhjain/bilan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
 
 ---
 
@@ -41,7 +58,7 @@ All local. All optional. Search works offline with zero network calls.
 ## Quick Start
 
 ```bash
-npm install -g github:varadhjain/claude-code-blog-generator
+npm install -g github:varadhjain/bilan
 
 # Search (no API key required — fully local BM25 over SQLite FTS5)
 ccblog index                 # one-time: build the search index
@@ -342,8 +359,8 @@ Set in `.env` file or environment. The setup wizard (`ccblog --setup`) walks you
 ## Development
 
 ```bash
-git clone https://github.com/varadhjain/claude-code-blog-generator.git
-cd claude-code-blog-generator
+git clone https://github.com/varadhjain/bilan.git
+cd bilan
 npm install
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env   # or OPENAI_API_KEY
 npm run build

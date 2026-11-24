@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "claude-code-blog-generator",
+      "name": "bilan",
       "dependencies": {
         "@inquirer/prompts": "^7.9.0",
         "openai": "^4.73.0",

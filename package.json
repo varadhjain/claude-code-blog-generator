@@ -1,8 +1,8 @@
 {
-  "name": "claude-code-blog-generator",
-  "version": "1.0.0",
-  "description": "Transform Claude Code sessions into engaging, educational blog posts with intelligent narrative chunking and PII redaction",
-  "main": "dist/index.js",
+  "name": "bilan",
+  "version": "1.1.0",
+  "description": "Personal coding-agent evals and reusable learnings from local Claude Code and Codex sessions",
+  "files": ["dist"],
   "bin": {
     "ccblog": "dist/cli/index.js",
     "bilan": "dist/bilan/cli.js"
@@ -22,7 +22,8 @@
     "annotate": "npx ts-node scripts/user-annotations/annotate-tui.ts",
     "sidebar": "npx ts-node scripts/blog-generation/interactive-sidebar.ts",
     "workflow": "npx ts-node scripts/blog-generation/interactive-workflow.ts",
-    "prepublishOnly": "npm run clean && npm run build && npm test"
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "claude",
@@ -40,14 +41,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/varadhjain/claude-code-blog-generator.git"
+    "url": "git+https://github.com/varadhjain/bilan.git"
   },
   "bugs": {
-    "url": "https://github.com/varadhjain/claude-code-blog-generator/issues"
+    "url": "https://github.com/varadhjain/bilan/issues"
   },
-  "homepage": "https://github.com/varadhjain/claude-code-blog-generator#readme",
+  "homepage": "https://github.com/varadhjain/bilan#readme",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
