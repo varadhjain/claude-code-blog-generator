@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -94,6 +94,54 @@ test('installed CLI reports two cohorts, source lines, and excludes private conv
     expect(run.stdout).toContain('turn line 1, follow-up line 8');
     expect(run.stdout).toContain('Duplicate turn records collapsed: 1');
     expect(run.stdout).not.toMatch(/private-model|private journal|Undo that/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('single-model review connects the exchange and keeps evidence only on explicit request', () => {
+  const home = mkdtempSync(join(tmpdir(), 'bilan-review-test-'));
+  try {
+    const source = join(home, '.codex', 'sessions');
+    const saved = join(home, '.bilan', 'learnings');
+    mkdirSync(source, { recursive: true });
+    const now = new Date(Date.now() - 10_000).toISOString();
+    const task = (id: string, text: string, reply: string) => [
+      { type: 'event_msg', timestamp: now, payload: { type: 'task_started', turn_id: id } },
+      { type: 'turn_context', payload: { turn_id: id, cwd, model: 'model-a' } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } },
+      { type: 'event_msg', timestamp: now, payload: { type: 'task_complete', turn_id: id, last_agent_message: reply } },
+    ];
+    const write = (name: string, entries: object[]) => writeFileSync(join(source, name),
+      entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+    const first: object[] = task('one', 'Fix the toolbar.', '');
+    first.splice(3, 0, {
+      type: 'response_item', timestamp: now, payload: {
+        type: 'message', role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: 'Fixed the toolbar.' }],
+      },
+    });
+    write('one.jsonl', [...first, ...task('two', 'Verify the actual workflow.', 'Checked.')]);
+    write('two.jsonl', [...task('three', 'Fix the dialog.', 'Fixed the dialog.'), ...task('four', 'Run a live check.', 'Checked.')]);
+    write('three.jsonl', [...task('five', 'Verify the real workflow after you fix it.', 'Fixed it.'), ...task('six', 'Verify the real workflow.', 'Checked.')]);
+    const run = (...args: string[]) => {
+      const result = spawnSync(process.execPath, [
+        '-r', 'ts-node/register/transpile-only', 'src/bilan/cli.ts', ...args,
+      ], { env: { ...process.env, HOME: home }, encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      return result.stdout;
+    };
+    const output = run('--project', cwd);
+    expect(output).toMatch(/\[verify\].*2 distinct turns/);
+    expect(output).toContain('turn line 1, answer line 4, follow-up line 8');
+    expect(existsSync(saved)).toBe(false);
+    expect(run('review', '--project', cwd, '--model', 'codex/model-a', '--keep', 'verify')).toContain('Saved [verify]');
+    expect(run('review', '--project', cwd, '--keep', 'verify')).toContain('already saved');
+    const [file] = readdirSync(saved);
+    expect(readdirSync(saved)).toHaveLength(1);
+    expect(statSync(join(saved, file)).mode & 0o777).toBe(0o600);
+    expect(readFileSync(join(saved, file), 'utf8')).not.toContain('Fix the toolbar');
+    expect(run('learnings', 'verification', '--project', cwd)).toContain('[verify]');
+    expect(run('learnings', '--project', '/example/other')).toContain('No saved learnings');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

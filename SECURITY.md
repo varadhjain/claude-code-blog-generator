@@ -114,4 +114,4 @@ npm update
 
 ## License
 
-This security policy is part of the claude-code-blog-generator project (MIT License).
+This security policy is part of the Bilan project (MIT License).
