@@ -16,6 +16,10 @@ EOF
 cat > "$TEST_ROOT/bin/npx" <<'EOF'
 #!/bin/bash
 [ -z "${UNRELATED_SECRET:-}" ] || exit 91
+case "${CCBLOG_FIXTURE:-file}:$3" in
+  file:reflect) printf '# Sample reflection\n' > "$HOME/.ccblog/reflections/current.md" ;;
+  failure:index) exit 1 ;;
+esac
 exit 0
 EOF
 
@@ -44,6 +48,7 @@ run_batch() {
   CAPTURE_ARGS="$TEST_ROOT/curl.args" \
   CAPTURE_PAYLOAD="$TEST_ROOT/payload.json" \
   FAKE_CURL_MODE="$1" \
+  CCBLOG_FIXTURE="${2:-file}" \
   bash "$SCRIPT_DIR/weekly-batch.sh" >/dev/null 2>&1
 }
 
@@ -58,11 +63,23 @@ assert payload["from"] == "ccblog@updates.varadhja.in"
 assert payload["to"] == ["varadhjain@gmail.com"]
 assert payload["plain"]
 assert payload["html"]
+assert "Sample reflection" in payload["html"]
 assert payload["source"] == "ccblog-weekly-batch"
 assert ("allow_" + "external") not in payload
 PY
 grep -q '^http://127.0.0.1:9100/send$' "$TEST_ROOT/curl.args"
 grep -q '^Authorization: Bearer test-token$' "$TEST_ROOT/curl.args"
+
+rm "$TEST_ROOT/curl.args"
+run_batch success quiet
+test ! -e "$TEST_ROOT/curl.args"
+run_batch success failure
+grep -q 'Failed steps' "$TEST_ROOT/payload.json"
+grep -q '<li>index</li>' "$TEST_ROOT/payload.json"
+if grep -q 'Sample reflection' "$TEST_ROOT/payload.json"; then
+  echo "failure digest included a stale reflection" >&2
+  exit 1
+fi
 
 if run_batch rejected; then
   echo "expected non-2xx mail-service response to fail" >&2

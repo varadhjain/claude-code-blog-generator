@@ -87,6 +87,7 @@ NEW_MARKER_FILE="$(mktemp)"
 
 echo "==== ccblog weekly batch — $(date) ====" | tee -a "$RUN_LOG"
 
+FAILED_STEPS=()
 run_step() {
   local label="$1"
   shift
@@ -96,7 +97,8 @@ run_step() {
     return 0
   else
     echo "[!] $label exited non-zero (continuing)" | tee -a "$RUN_LOG"
-    return 0  # never abort — we want the email even on partial failure
+    FAILED_STEPS+=("$label")
+    return 0
   fi
 }
 
@@ -121,75 +123,71 @@ for dir in reflections skill-proposals memory-proposals claude-md-proposals anti
   done < <(find "$full" -type f -newer "$NEW_MARKER_FILE" \( -name "*.md" -o -name "*.txt" \) 2>/dev/null)
 done
 
-# Pull the freshest reflection body (full file, not just summary).
-REFLECTION_BODY=""
-LATEST_REFLECTION="$(ls -t "$CCBLOG_ROOT/reflections"/*.md 2>/dev/null | head -1 || true)"
-if [ -n "$LATEST_REFLECTION" ] && [ -f "$LATEST_REFLECTION" ]; then
-  REFLECTION_BODY="$(cat "$LATEST_REFLECTION")"
+if [ "${#NEW_FILES[@]}" -eq 0 ] && [ "${#FAILED_STEPS[@]}" -eq 0 ]; then
+  echo "No new material to review; digest skipped." | tee -a "$RUN_LOG"
+  rm -f "$NEW_MARKER_FILE"
+  touch "$PREV_MARKER"
+  exit 0
 fi
 
-# Compose the email body. Plain text — keeps it grep-able later.
-EMAIL_FILE="$(mktemp)"
-{
-  echo "ccblog weekly compound-engineering digest — week of $DATE_STAMP"
-  echo "================================================================"
-  echo ""
-  echo "Files written this run (${#NEW_FILES[@]}):"
-  if [ "${#NEW_FILES[@]}" -eq 0 ]; then
-    echo "  (none — either no patterns met the ≥2-session bar, or scripts failed; check $RUN_LOG)"
-  else
-    for f in "${NEW_FILES[@]}"; do
-      echo "  - $f"
-    done
-  fi
-  echo ""
-  echo "To install a proposal: open the file, copy the section BELOW the"
-  echo "'## ... (copy below this line)' divider into the suggested target dir"
-  echo "(printed in the file's frontmatter as suggested_dir / suggested_section)."
-  echo ""
-  echo "================================================================"
-  echo "Latest reflection (full body) — $LATEST_REFLECTION"
-  echo "================================================================"
-  echo ""
-  if [ -n "$REFLECTION_BODY" ]; then
-    echo "$REFLECTION_BODY"
-  else
-    echo "(no reflection produced this run)"
-  fi
-  echo ""
-  echo "================================================================"
-  echo "Run log: $RUN_LOG"
-} > "$EMAIL_FILE"
-
-# Send through mail-service. Subject reflects whether anything was found, so
-# the inbox preview is honest.
-SUBJECT="ccblog weekly batch — $DATE_STAMP — ${#NEW_FILES[@]} proposal(s)"
-
-# Use python to JSON-escape the body and produce a minimal safe HTML companion.
-# NB: env-assignments must come BEFORE `python3` — placing `EMAIL_FILE=... SUBJECT=...`
-# after `-c '...'` passes them as sys.argv, NOT os.environ, so os.environ[...] raised
-# KeyError → empty payload → gateway 400 "Request body must be valid JSON".
-JSON_PAYLOAD="$(EMAIL_FILE="$EMAIL_FILE" SUBJECT="$SUBJECT" python3 -c '
-import json, os
+JSON_PAYLOAD="$(python3 - "$DATE_STAMP" "${#FAILED_STEPS[@]}" ${FAILED_STEPS[@]+"${FAILED_STEPS[@]}"} ${NEW_FILES[@]+"${NEW_FILES[@]}"} <<'PYMAIL'
 import html
-with open(os.environ["EMAIL_FILE"]) as f:
-    body = f.read()
+import json
+from pathlib import Path
+import re
+import sys
+
+day, failed_count, *items = sys.argv[1:]
+failed_count = int(failed_count)
+failures, files = items[:failed_count], [Path(path) for path in items[failed_count:]]
+subject = f"Bilan weekly · {day} · " + ("batch needs attention" if failures else f"{len(files)} new items to review")
+opening = "Some batch steps failed. Review the failures before relying on this week's results." if failures else (
+    "Review the new reflections and proposals from this week's coding sessions.")
+rows = []
+for path in files:
+    with path.open(errors="replace") as source_file:
+        preview = source_file.read(4000)
+    heading = re.search(r"^# (.+)$", preview, re.M)
+    title = heading[1].strip()[:180] if heading else path.stem
+    rows.append((path.parent.name.replace("-", " ").title(), title, path.name))
+plain = [opening]
+parts = ['<main style="max-width:600px;margin:auto;padding:24px 20px;background:#f5f4ef;color:#282822;'
+         'font:16px/1.55 system-ui,sans-serif"><p style="margin:0">Bilan · ' + html.escape(day)
+         + '</p><h1 style="font-size:28px;line-height:1.2;margin:8px 0">Weekly review</h1><p>'
+         + html.escape(opening) + '</p>']
+if failures:
+    plain += ["", "Failed steps", *["- " + name for name in failures]]
+    parts += ['<h2 style="font-size:21px;margin:20px 0 8px">Failed steps</h2><ul>',
+              *[f'<li>{html.escape(name)}</li>' for name in failures], "</ul>"]
+if rows:
+    plain += ["", "New review items", *[f"- {kind}: {title} ({name})" for kind, title, name in rows]]
+    parts += ['<h2 style="font-size:21px;margin:20px 0 8px">New review items</h2><ul style="padding-left:19px">',
+              *[f'<li style="margin-bottom:11px"><strong>{html.escape(title)}</strong><br>'
+                f'<span style="font-size:14px;color:#56574c">{html.escape(kind)}</span></li>' for kind, title, name in rows],
+              "</ul>"]
+parts.append("</main>")
 print(json.dumps({
     "from": "ccblog@updates.varadhja.in",
     "to": ["varadhjain@gmail.com"],
-    "subject": os.environ["SUBJECT"],
-    "plain": body,
-    "html": "<pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" + html.escape(body) + "</pre>",
+    "subject": subject,
+    "plain": "\n".join(plain),
+    "html": "".join(parts),
     "source": "ccblog-weekly-batch",
 }))
-')"
+PYMAIL
+)"
+if [ -z "$JSON_PAYLOAD" ]; then
+  echo "Could not render weekly review." | tee -a "$RUN_LOG" >&2
+  rm -f "$NEW_MARKER_FILE"
+  exit 1
+fi
 
 if ! HTTP_RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "${MAIL_SERVICE_URL%/}/send" \
   -H "Authorization: Bearer $MAIL_SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d "$JSON_PAYLOAD")"; then
   echo "mail-service unavailable" | tee -a "$RUN_LOG" >&2
-  rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
+  rm -f "$NEW_MARKER_FILE"
   exit 1
 fi
 
@@ -203,10 +201,10 @@ echo "$HTTP_BODY" | tee -a "$RUN_LOG"
 
 if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
   echo "mail-service rejected the digest" | tee -a "$RUN_LOG" >&2
-  rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
+  rm -f "$NEW_MARKER_FILE"
   exit 1
 fi
 
-rm -f "$EMAIL_FILE" "$NEW_MARKER_FILE"
+rm -f "$NEW_MARKER_FILE"
 touch "$PREV_MARKER"
 echo "==== done $(date) ====" | tee -a "$RUN_LOG"
